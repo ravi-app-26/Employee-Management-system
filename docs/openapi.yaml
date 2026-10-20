@@ -1,0 +1,1392 @@
+openapi: 3.1.0
+info:
+  title: Employee Management API
+  version: 1.0.0
+  description: >-
+    Employee management API with authenticated private local document uploads.
+servers:
+  - url: http://localhost:3000
+    description: Local development server (PORT defaults to 3000)
+tags:
+  - name: Health
+  - name: Authentication
+  - name: Departments
+  - name: Employees
+  - name: Documents
+paths:
+  /health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      summary: Check API health
+      security: []
+      responses:
+        '200':
+          description: API process is responding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /health/live:
+    get:
+      tags: [Health]
+      operationId: getLiveness
+      summary: Check process liveness
+      security: []
+      responses:
+        '200':
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProbeResponse'
+
+  /health/ready:
+    get:
+      tags: [Health]
+      operationId: getReadiness
+      summary: Check database readiness
+      security: []
+      responses:
+        '200':
+          description: Database is reachable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProbeResponse'
+        '503':
+          description: Database is unavailable
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/v1/auth/register:
+    post:
+      tags: [Authentication]
+      operationId: register
+      summary: Create an employee account
+      description: Requires an authenticated admin or HR user. The new account is assigned the employee role by the server.
+      security:
+        - bearerAuth: []
+      x-required-roles: [admin, hr]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/RegisteredAccount'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/auth/login:
+    post:
+      tags: [Authentication]
+      operationId: login
+      summary: Authenticate with email and password
+      description: Returns a short-lived access token and sets the refresh token in an HttpOnly cookie.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/RefreshCookie'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AccessTokenResult'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [Authentication]
+      operationId: refreshAccessToken
+      summary: Rotate the refresh token and issue a new access token
+      description: Reads the refresh_token cookie, rotates it, and sets the replacement cookie.
+      security:
+        - refreshCookie: []
+      responses:
+        '200':
+          description: Tokens refreshed
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/RefreshCookie'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AccessTokenResult'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Authentication]
+      operationId: logout
+      summary: Revoke the current refresh-token session
+      description: If the refresh_token cookie is present, its token family is revoked; the cookie is cleared.
+      security: []
+      parameters:
+        - name: refresh_token
+          in: cookie
+          required: false
+          description: HttpOnly refresh token set by the login or refresh endpoint.
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Session revoked if present and cookie cleared
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/auth/logout-all:
+    post:
+      tags: [Authentication]
+      operationId: logoutAll
+      summary: Revoke all refresh-token sessions for the current user
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: All refresh-token sessions revoked and refresh cookie cleared
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/auth/sessions:
+    get:
+      tags: [Authentication]
+      operationId: listSessions
+      summary: List the current user's active sessions
+      description: Session IDs are refresh-token family UUIDs. The response does not expose token values or hashes.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Active sessions belonging to the authenticated user
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/auth/sessions/{id}:
+    delete:
+      tags: [Authentication]
+      operationId: revokeSession
+      summary: Revoke one of the current user's sessions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Session/refresh-token family UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Session revoked
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/auth/change-password:
+    post:
+      tags: [Authentication]
+      operationId: changePassword
+      summary: Change the current user's password
+      description: Verifies the current password, stores a bcrypt hash, revokes all refresh sessions, and clears the refresh cookie.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: Password changed and refresh sessions revoked
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/auth/me:
+    get:
+      tags: [Authentication]
+      operationId: getCurrentPrincipal
+      summary: Get the authenticated principal
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Authenticated principal claims
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Principal'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/auth/admin-only:
+    get:
+      tags: [Authentication]
+      operationId: getAdminOnlyCheck
+      summary: Verify administrator access
+      description: Requires an authenticated user with the admin role.
+      security:
+        - bearerAuth: []
+      x-required-role: admin
+      responses:
+        '200':
+          description: Authenticated administrator principal
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Principal'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/auth/can-create-employee:
+    get:
+      tags: [Authentication]
+      operationId: checkEmployeeCreatePermission
+      summary: Verify employee-create permission
+      description: Requires the employee:create permission. Returns the authenticated principal when allowed.
+      security:
+        - bearerAuth: []
+      x-required-permission: employee:create
+      responses:
+        '200':
+          description: Authenticated principal has the required permission
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Principal'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/departments:
+    post:
+      tags: [Departments]
+      operationId: createDepartment
+      summary: Create a department
+      security:
+        - bearerAuth: []
+      x-required-permission: department:create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDepartmentRequest'
+      responses:
+        '201':
+          description: Department created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Department'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    get:
+      tags: [Departments]
+      operationId: listDepartments
+      summary: List departments
+      description: Results are ordered by department name ascending.
+      security:
+        - bearerAuth: []
+      x-required-permission: department:read
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated departments
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DepartmentPage'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/departments/{id}:
+    patch:
+      tags: [Departments]
+      operationId: updateDepartment
+      summary: Update a department
+      security:
+        - bearerAuth: []
+      x-required-permission: department:update
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Department UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDepartmentRequest'
+      responses:
+        '200':
+          description: Department updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Department'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/employees:
+    post:
+      tags: [Employees]
+      operationId: createEmployee
+      summary: Create an employee record
+      description: Creates an employee record only; it does not create a login account.
+      security:
+        - bearerAuth: []
+      x-required-roles: [admin, hr]
+      x-required-permission: employee:create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEmployeeRequest'
+      responses:
+        '201':
+          description: Employee created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Employee'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    get:
+      tags: [Employees]
+      operationId: listEmployees
+      summary: List employees
+      description: Supports pagination, optional department/status filters, case-insensitive keyword search, and allowlisted sorting.
+      security:
+        - bearerAuth: []
+      x-required-permission: employee:read
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: departmentId
+          in: query
+          required: false
+          description: Filter by department UUID
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          description: Filter by employment status
+          schema:
+            $ref: '#/components/schemas/EmploymentStatus'
+        - name: search
+          in: query
+          required: false
+          description: Search first name, last name, work email, and job title
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+        - name: sortBy
+          in: query
+          required: false
+          description: Allowlisted employee field used for sorting
+          schema:
+            type: string
+            enum: [firstName, lastName, workEmail, joiningDate, createdAt]
+            default: createdAt
+        - name: order
+          in: query
+          required: false
+          description: Sort direction
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        '200':
+          description: Paginated employee results
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/EmployeePage'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/employees/me:
+    get:
+      tags: [Employees]
+      operationId: getOwnEmployeeProfile
+      summary: Get the logged-in employee's profile
+      security:
+        - bearerAuth: []
+      x-required-permission: profile:read_own
+      responses:
+        '200':
+          description: Own employee profile
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Employee'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    patch:
+      tags: [Employees]
+      operationId: updateOwnEmployeeProfile
+      summary: Update permitted fields in the logged-in employee's profile
+      description: Only firstName, lastName, and phone are accepted; role, department, job title, and employment status are not writable here.
+      security:
+        - bearerAuth: []
+      x-required-permission: profile:update_own
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOwnProfileRequest'
+      responses:
+        '200':
+          description: Own profile updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Employee'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/employees/{id}:
+    get:
+      tags: [Employees]
+      operationId: getEmployee
+      summary: Get an employee by ID
+      description: Admin and HR may read any employee; managers may read themselves and direct reports. Out-of-scope records return 404.
+      security:
+        - bearerAuth: []
+      x-required-permission: employee:read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Employee UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Employee record
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Employee'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    patch:
+      tags: [Employees]
+      operationId: updateEmployee
+      summary: Update an employee record
+      description: HR and admins may update any employee; managers are limited to themselves and direct reports.
+      security:
+        - bearerAuth: []
+      x-required-permission: employee:update
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Employee UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEmployeeRequest'
+      responses:
+        '200':
+          description: Employee updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Employee'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags: [Employees]
+      operationId: deactivateEmployee
+      summary: Deactivate an employee
+      description: Sets employmentStatus to inactive, disables any linked user account, and revokes that user's refresh sessions.
+      security:
+        - bearerAuth: []
+      x-required-permission: employee:deactivate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Employee UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Employee deactivated
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/employees/{id}/documents:
+    post:
+      tags: [Documents]
+      operationId: uploadEmployeeDocument
+      summary: Upload a private employee document
+      description: Multipart field `file`; only matching PDF, PNG, and JPEG extension, MIME type, and file signature are accepted. Maximum size is configured by MAX_DOCUMENT_SIZE_BYTES (default 5 MiB). Admin/HR or the employee themself may upload; manager access is limited to reading direct reports.
+      security:
+        - bearerAuth: []
+      x-access-policy: admin, HR, or employee owner
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Document metadata created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentEnvelope'
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '503': { $ref: '#/components/responses/ServerError' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    get:
+      tags: [Documents]
+      operationId: listEmployeeDocuments
+      summary: List active documents for an employee
+      description: Admin/HR, the employee themself, or the employee's manager may list metadata for that employee.
+      security:
+        - bearerAuth: []
+      x-access-policy: admin, HR, employee owner, or direct manager
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Active document metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/EmployeeDocument' }
+                  requestId: { type: string }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  /api/v1/documents/{id}/download-url:
+    get:
+      tags: [Documents]
+      operationId: createDocumentDownloadUrl
+      summary: Create a five-minute authorized download URL
+      description: Admin/HR, the employee themself, or the employee's direct manager may issue a short-lived URL.
+      security:
+        - bearerAuth: []
+      x-access-policy: admin, HR, employee owner, or direct manager
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Short-lived signed API URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    required: [downloadUrl, expiresInSeconds]
+                    properties:
+                      downloadUrl: { type: string, format: uri }
+                      expiresInSeconds: { type: integer, const: 300 }
+                  requestId: { type: string }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '503': { $ref: '#/components/responses/ServerError' }
+
+  /api/v1/documents/{id}/download:
+    get:
+      tags: [Documents]
+      operationId: downloadDocument
+      summary: Download a document using its short-lived signed URL
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: token
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Private file stream
+          content:
+            application/pdf: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '503': { $ref: '#/components/responses/ServerError' }
+
+  /api/v1/documents/{id}:
+    delete:
+      tags: [Documents]
+      operationId: deleteDocument
+      summary: Soft-delete an employee document
+      description: Access is limited to admin/HR and the document owner. The file is retained locally for UPLOAD_RETENTION_DAYS (default 30) before cleanup.
+      security:
+        - bearerAuth: []
+      x-access-policy: admin, HR, or employee owner
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Document marked deleted }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived access token returned by login or refresh.
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: refresh_token
+      description: HttpOnly refresh token cookie set by login/refresh; Secure in production and SameSite Strict.
+  headers:
+    RefreshCookie:
+      description: Rotated refresh token cookie; HttpOnly, SameSite=Strict, path=/api/v1/auth, Secure in production.
+      schema:
+        type: string
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      description: One-based page number
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Number of records per page; maximum 100
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+  EmployeeSortBy:
+    name: sortBy
+    in: query
+    required: false
+    schema:
+      type: string
+      enum: [firstName, lastName, workEmail, joiningDate, createdAt]
+      default: createdAt
+  SortOrder:
+    name: order
+    in: query
+    required: false
+    schema: { type: string, enum: [asc, desc], default: asc }
+  responses:
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    PayloadTooLarge:
+      description: Uploaded file or request exceeds configured size limit
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimitError:
+      description: Request rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnauthorizedError:
+      description: Authentication is missing or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ForbiddenError:
+      description: Authenticated user lacks the required role or permission
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFoundError:
+      description: Requested resource does not exist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ConflictError:
+      description: Resource conflicts with an existing database constraint or reference
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServerError:
+      description: Unexpected server or database error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: ok
+    ProbeResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [live, ready]
+    EmployeeDocument:
+      type: object
+      required: [id, employeeId, originalName, mimeType, sizeBytes, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        employeeId: { type: string, format: uuid }
+        originalName: { type: string, maxLength: 255 }
+        mimeType: { type: string, enum: [application/pdf, image/png, image/jpeg] }
+        sizeBytes: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+    DocumentEnvelope:
+      type: object
+      required: [success, data, requestId]
+      properties:
+        success: { type: boolean, const: true }
+        data: { $ref: '#/components/schemas/EmployeeDocument' }
+        requestId: { type: string }
+    SuccessEnvelope:
+      type: object
+      required: [success, requestId]
+      properties:
+        success:
+          type: boolean
+          const: true
+        requestId:
+          type: string
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code:
+              type: string
+              examples: [VALIDATION_ERROR, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT, INTERNAL_ERROR]
+            message:
+              type: string
+            details:
+              description: Validation issue array or other error-specific details; omitted when absent.
+              oneOf:
+                - type: array
+                  items:
+                    type: object
+                    properties:
+                      path:
+                        type: string
+                      message:
+                        type: string
+                - type: object
+                - type: 'null'
+            requestId:
+              type: string
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [firstName, lastName, email, password, departmentId, jobTitle]
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 72
+        departmentId:
+          type: string
+          format: uuid
+        jobTitle:
+          type: string
+          minLength: 1
+          maxLength: 100
+    RegisteredAccount:
+      type: object
+      required: [id, email]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        password:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 128
+    AccessTokenResult:
+      type: object
+      required: [accessToken]
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token; use as a Bearer token for protected endpoints.
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 128
+        newPassword:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 72
+    Session:
+      type: object
+      required: [id, createdAt, expiresAt, current]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Refresh-token family/session UUID
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        current:
+          type: boolean
+          description: Whether this session matches the refresh token cookie sent with the request.
+    Principal:
+      type: object
+      required: [id, role, employeeId]
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          type: string
+        employeeId:
+          type: string
+          format: uuid
+    CreateDepartmentRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+    CreateEmployeeRequest:
+      type: object
+      additionalProperties: false
+      required: [departmentId, jobTitle, joiningDate]
+      properties:
+        phone:
+          type: string
+          pattern: '^[+0-9 ()-]{6,30}$'
+        departmentId:
+          type: string
+          format: uuid
+        managerId:
+          type: string
+          format: uuid
+        jobTitle:
+          type: string
+          minLength: 1
+          maxLength: 100
+        joiningDate:
+          type: string
+          format: date
+    UpdateEmployeeRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        Update fields are optional, but at least one is required. phone and
+        managerId may be null to clear them; employmentStatus may be changed.
+      minProperties: 1
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        workEmail:
+          type: string
+          format: email
+          maxLength: 255
+        departmentId:
+          type: string
+          format: uuid
+        jobTitle:
+          type: string
+          minLength: 1
+          maxLength: 100
+        joiningDate:
+          type: string
+          format: date
+        phone:
+          type: [string, 'null']
+          pattern: '^[+0-9 ()-]{6,30}$'
+        managerId:
+          type: [string, 'null']
+          format: uuid
+        employmentStatus:
+          $ref: '#/components/schemas/EmploymentStatus'
+    UpdateOwnProfileRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        phone:
+          type: [string, 'null']
+          pattern: '^[+0-9 ()-]{6,30}$'
+    UpdateDepartmentRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: [string, 'null']
+          maxLength: 500
+    Department:
+      type: object
+      required: [id, name, description, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Pagination:
+      type: object
+      required: [page, limit, total, totalPages]
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        total:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+    DepartmentPage:
+      type: object
+      required: [data, pagination]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Department'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    EmploymentStatus:
+      type: string
+      enum: [active, inactive, on_leave]
+    Employee:
+      type: object
+      required: [id, firstName, lastName, workEmail, phone, departmentId, managerId, jobTitle, joiningDate, employmentStatus, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: [string, 'null']
+        lastName:
+          type: [string, 'null']
+        workEmail:
+          type: [string, 'null']
+          format: email
+        phone:
+          type: [string, 'null']
+        departmentId:
+          type: string
+          format: uuid
+        managerId:
+          type: [string, 'null']
+          format: uuid
+        jobTitle:
+          type: string
+        joiningDate:
+          type: string
+          format: date
+        employmentStatus:
+          $ref: '#/components/schemas/EmploymentStatus'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    EmployeePage:
+      type: object
+      required: [data, pagination]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Employee'
+        pagination:
+          $ref: '#/components/schemas/Pagination'

@@ -1,0 +1,306 @@
+{
+  "info": {
+    "_postman_id": "a1df3379-1bb4-4a61-a0cf-47e369f62c22",
+    "name": "Employee Management API - Role Access Test",
+    "description": "Run in Collection Runner after starting the API and seeding the database. Verifies admin/HR can create employees and accounts, while employees and unauthenticated callers cannot.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "devPassword", "value": "DevPass#12345" }
+  ],
+  "item": [
+    {
+      "name": "1. Login as admin",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@example.test\",\n  \"password\": \"{{devPassword}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Admin login succeeds', function () { pm.response.to.have.status(200); });",
+              "const body = pm.response.json();",
+              "pm.test('Login returns access token', function () { pm.expect(body.data.accessToken).to.be.a('string'); });",
+              "pm.collectionVariables.set('adminToken', body.data.accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Create test department (admin allowed)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Postman Test {{runId}}\",\n  \"description\": \"Temporary department created by role-access Postman collection\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/departments"
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.collectionVariables.set('runId', pm.variables.replaceIn('{{$guid}}'));" ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Admin can create a department', function () { pm.response.to.have.status(201); });",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('departmentId', body.data.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Register account (admin allowed)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"firstName\": \"AdminCreated\",\n  \"lastName\": \"Employee\",\n  \"email\": \"admin-created-{{runId}}@example.test\",\n  \"password\": \"{{devPassword}}\",\n  \"departmentId\": \"{{departmentId}}\",\n  \"jobTitle\": \"QA Employee\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/auth/register"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Admin can create an employee account', function () { pm.response.to.have.status(201); });",
+              "const body = pm.response.json();",
+              "pm.test('New account is returned', function () { pm.expect(body.data.id).to.be.a('string'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Create employee record (admin allowed)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"departmentId\": \"{{departmentId}}\",\n  \"jobTitle\": \"QA Employee Record\",\n  \"joiningDate\": \"2026-10-19\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/employees"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('Admin can create an employee record', function () { pm.response.to.have.status(201); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Login as HR",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"hr@example.test\",\n  \"password\": \"{{devPassword}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HR login succeeds', function () { pm.response.to.have.status(200); });",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('hrToken', body.data.accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Register account (HR allowed)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{hrToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"firstName\": \"HrCreated\",\n  \"lastName\": \"Employee\",\n  \"email\": \"hr-created-{{runId}}@example.test\",\n  \"password\": \"{{devPassword}}\",\n  \"departmentId\": \"{{departmentId}}\",\n  \"jobTitle\": \"QA Employee\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/auth/register"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HR can create an employee account', function () { pm.response.to.have.status(201); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Create employee record (HR allowed)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{hrToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"departmentId\": \"{{departmentId}}\",\n  \"jobTitle\": \"HR Created Employee Record\",\n  \"joiningDate\": \"2026-10-19\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/employees"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('HR can create an employee record', function () { pm.response.to.have.status(201); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Login as employee",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"employee@example.test\",\n  \"password\": \"{{devPassword}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Employee login succeeds', function () { pm.response.to.have.status(200); });",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('employeeToken', body.data.accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Employee cannot register account",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{employeeToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"firstName\": \"ShouldNot\",\n  \"lastName\": \"BeCreated\",\n  \"email\": \"denied-{{runId}}@example.test\",\n  \"password\": \"{{devPassword}}\",\n  \"departmentId\": \"{{departmentId}}\",\n  \"jobTitle\": \"Denied\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/auth/register"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('Employee account registration is forbidden', function () { pm.response.to.have.status(403); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Employee cannot create employee record",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{employeeToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"departmentId\": \"{{departmentId}}\",\n  \"jobTitle\": \"Should Be Denied\",\n  \"joiningDate\": \"2026-10-19\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/employees"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('Employee record creation is forbidden', function () { pm.response.to.have.status(403); });"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Unauthenticated caller cannot register",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"firstName\": \"No\",\n  \"lastName\": \"Token\",\n  \"email\": \"no-token-{{runId}}@example.test\",\n  \"password\": \"{{devPassword}}\",\n  \"departmentId\": \"{{departmentId}}\",\n  \"jobTitle\": \"Denied\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/auth/register"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('Unauthenticated registration is rejected', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    }
+  ]
+}

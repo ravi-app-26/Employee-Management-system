@@ -1,0 +1,349 @@
+{
+  "info": {
+    "_postman_id": "98d23291-2414-4de6-b782-9675e63bdb12",
+    "name": "Employee Management API - Full Collection",
+    "description": "Covers every mounted API route. Run requests in order with Collection Runner. Requires the API running and seeded admin account. Test data is created with a unique run ID; a dedicated employee account is used for password/session operations.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "devPassword", "value": "DevPass#12345" },
+    { "key": "changedPassword", "value": "PostmanNew#4567" },
+    { "key": "adminToken", "value": "" },
+    { "key": "employeeToken", "value": "" },
+    { "key": "departmentId", "value": "" },
+    { "key": "accountEmail", "value": "" },
+    { "key": "accountEmployeeId", "value": "" },
+    { "key": "createdEmployeeId", "value": "" },
+    { "key": "sessionId", "value": "" },
+    { "key": "runId", "value": "" },
+    { "key": "testDate", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "00 - Health and Admin Login",
+      "item": [
+        {
+          "name": "Health check",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.collectionVariables.set('runId', pm.variables.replaceIn('{{$guid}}'));"] } },
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('API health is OK', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": { "method": "GET", "url": "{{baseUrl}}/health" }
+        },
+        {
+          "name": "Liveness probe",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Liveness probe returns live', function () { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('live'); });"] } }],
+          "request": { "method": "GET", "url": "{{baseUrl}}/health/live" }
+        },
+        {
+          "name": "Readiness probe",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Readiness probe returns ready when DB is available', function () { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('ready'); });"] } }],
+          "request": { "method": "GET", "url": "{{baseUrl}}/health/ready" }
+        },
+        {
+          "name": "Login - admin seeded account",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Admin login succeeds', function () { pm.response.to.have.status(200); });", "const body = pm.response.json();", "pm.collectionVariables.set('adminToken', body.data.accessToken);"] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@example.test\",\n  \"password\": \"{{devPassword}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "GET - current principal (admin)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Current principal returns 200', function () { pm.response.to.have.status(200); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/auth/me" }
+        },
+        {
+          "name": "GET - admin-only check",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Admin-only check passes for admin', function () { pm.response.to.have.status(200); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/auth/admin-only" }
+        },
+        {
+          "name": "GET - employee:create permission check",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Admin has employee:create permission', function () { pm.response.to.have.status(200); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/auth/can-create-employee" }
+        }
+      ]
+    },
+    {
+      "name": "01 - Departments",
+      "item": [
+        {
+          "name": "GET - list departments",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Department list returns 200', function () { pm.response.to.have.status(200); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/departments?page=1&limit=20" }
+        },
+        {
+          "name": "POST - create test department",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Department create returns 201', function () { pm.response.to.have.status(201); });", "const body = pm.response.json();", "pm.collectionVariables.set('departmentId', body.data.id);"] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Postman Test {{runId}}\",\n  \"description\": \"Department created by the full Postman API collection\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/departments"
+          }
+        },
+        {
+          "name": "PATCH - update test department",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Department update returns 200', function () { pm.response.to.have.status(200); });"] } }],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"description\": \"Updated by Postman run {{runId}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/departments/{{departmentId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Employee Accounts and Records (Admin)",
+      "item": [
+        {
+          "name": "POST - register employee account (admin only)",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.collectionVariables.set('accountEmail', 'postman-' + pm.collectionVariables.get('runId') + '@example.test');", "pm.collectionVariables.set('testDate', new Date().toISOString().slice(0, 10));"] } },
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Admin can register employee account', function () { pm.response.to.have.status(201); });", "const body = pm.response.json();", "pm.collectionVariables.set('accountUserId', body.data.id);"] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"firstName\": \"Postman\",\n  \"lastName\": \"Employee\",\n  \"email\": \"{{accountEmail}}\",\n  \"password\": \"{{devPassword}}\",\n  \"departmentId\": \"{{departmentId}}\",\n  \"jobTitle\": \"Postman QA Employee\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/auth/register"
+          }
+        },
+        {
+          "name": "POST - create employee record without login account",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Admin can create employee record', function () { pm.response.to.have.status(201); });", "const body = pm.response.json();", "pm.collectionVariables.set('createdEmployeeId', body.data.id);"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"departmentId\": \"{{departmentId}}\",\n  \"jobTitle\": \"Standalone Postman Employee\",\n  \"joiningDate\": \"{{testDate}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/employees"
+          }
+        },
+        {
+          "name": "GET - list employees",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Employee list returns 200', function () { pm.response.to.have.status(200); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/employees?page=1&limit=20&sortBy=createdAt&order=desc" }
+        },
+        {
+          "name": "GET - find registered employee ID",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Search for new employee returns 200', function () { pm.response.to.have.status(200); });", "const body = pm.response.json();", "const employee = body.data.data.find((item) => item.workEmail === pm.collectionVariables.get('accountEmail'));", "pm.test('New employee record is found', function () { pm.expect(employee).to.exist; });", "pm.collectionVariables.set('accountEmployeeId', employee.id);"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/employees?page=1&limit=100&search={{accountEmail}}&sortBy=createdAt&order=desc" }
+        },
+        {
+          "name": "GET - employee by ID",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Get employee by ID returns 200', function () { pm.response.to.have.status(200); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/employees/{{accountEmployeeId}}" }
+        },
+        {
+          "name": "PATCH - update employee record",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Employee update returns 200', function () { pm.response.to.have.status(200); });"] } }],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"jobTitle\": \"Updated Postman QA Employee\",\n  \"employmentStatus\": \"on_leave\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/employees/{{accountEmployeeId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Employee Self-Service and Access Checks",
+      "item": [
+        {
+          "name": "Login - newly registered employee",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Registered employee login succeeds', function () { pm.response.to.have.status(200); });", "const body = pm.response.json();", "pm.collectionVariables.set('employeeToken', body.data.accessToken);"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{accountEmail}}\",\n  \"password\": \"{{devPassword}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "GET - employee own principal",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Employee principal returns 200', function () { pm.response.to.have.status(200); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }], "url": "{{baseUrl}}/api/v1/auth/me" }
+        },
+        {
+          "name": "GET - own employee profile",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Own employee profile returns 200', function () { pm.response.to.have.status(200); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }], "url": "{{baseUrl}}/api/v1/employees/me" }
+        },
+        {
+          "name": "PATCH - own employee profile",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Own profile update returns 200', function () { pm.response.to.have.status(200); });"] } }],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"firstName\": \"PostmanUpdated\",\n  \"phone\": \"+1 555 010 0200\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/employees/me"
+          }
+        },
+        {
+          "name": "GET - employee list denied for employee role",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Employee role cannot list all employees', function () { pm.response.to.have.status(403); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }], "url": "{{baseUrl}}/api/v1/employees?page=1&limit=20" }
+        },
+        {
+          "name": "GET - admin-only endpoint denied for employee role",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Employee role cannot access admin-only endpoint', function () { pm.response.to.have.status(403); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }], "url": "{{baseUrl}}/api/v1/auth/admin-only" }
+        },
+        {
+          "name": "GET - create permission denied for employee role",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Employee role lacks employee:create', function () { pm.response.to.have.status(403); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }], "url": "{{baseUrl}}/api/v1/auth/can-create-employee" }
+        },
+        {
+          "name": "POST - employee account registration denied for employee role",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Employee role cannot register another account', function () { pm.response.to.have.status(403); });"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"firstName\": \"Denied\",\n  \"lastName\": \"User\",\n  \"email\": \"denied-{{runId}}@example.test\",\n  \"password\": \"{{devPassword}}\",\n  \"departmentId\": \"{{departmentId}}\",\n  \"jobTitle\": \"Denied Account\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/auth/register"
+          }
+        },
+        {
+          "name": "POST - employee record creation denied for employee role",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Employee role cannot create employee records', function () { pm.response.to.have.status(403); });"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"departmentId\": \"{{departmentId}}\",\n  \"jobTitle\": \"Denied Record\",\n  \"joiningDate\": \"{{testDate}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/employees"
+          }
+        },
+        {
+          "name": "GET - employee detail denied by employee:read permission",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Employee role cannot use employee detail route without employee:read', function () { pm.response.to.have.status(403); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }], "url": "{{baseUrl}}/api/v1/employees/{{accountEmployeeId}}" }
+        },
+        {
+          "name": "DELETE - employee deactivation denied for employee role",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Employee role cannot deactivate employee records', function () { pm.response.to.have.status(403); });"] } }],
+          "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }], "url": "{{baseUrl}}/api/v1/employees/{{accountEmployeeId}}" }
+        }
+      ]
+    },
+    {
+      "name": "04 - Refresh Tokens and Sessions (Dedicated Test Account)",
+      "item": [
+        {
+          "name": "GET - list active sessions",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Sessions list returns 200', function () { pm.response.to.have.status(200); });", "const body = pm.response.json();", "pm.collectionVariables.set('sessionId', body.data[0].id);"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }], "url": "{{baseUrl}}/api/v1/auth/sessions" }
+        },
+        {
+          "name": "POST - refresh access token",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Refresh returns a new access token', function () { pm.response.to.have.status(200); });", "const body = pm.response.json();", "pm.collectionVariables.set('employeeToken', body.data.accessToken);"] } }],
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/auth/refresh" }
+        },
+        {
+          "name": "DELETE - revoke one session",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Session revocation returns 204', function () { pm.response.to.have.status(204); });"] } }],
+          "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }], "url": "{{baseUrl}}/api/v1/auth/sessions/{{sessionId}}" }
+        },
+        {
+          "name": "POST - logout",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Logout returns 204', function () { pm.response.to.have.status(204); });"] } }],
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/auth/logout" }
+        },
+        {
+          "name": "POST - logout all sessions",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Logout all returns 204', function () { pm.response.to.have.status(204); });"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }], "url": "{{baseUrl}}/api/v1/auth/logout-all" }
+        },
+        {
+          "name": "POST - change password for dedicated test account",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Password change returns 204', function () { pm.response.to.have.status(204); });"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"currentPassword\": \"{{devPassword}}\",\n  \"newPassword\": \"{{changedPassword}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/auth/change-password"
+          }
+        },
+        {
+          "name": "Login - changed password",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Login with changed password succeeds', function () { pm.response.to.have.status(200); });", "const body = pm.response.json();", "pm.collectionVariables.set('employeeToken', body.data.accessToken);"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{accountEmail}}\",\n  \"password\": \"{{changedPassword}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "POST - logout after password-change login",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Final logout returns 204', function () { pm.response.to.have.status(204); });"] } }],
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/auth/logout" }
+        }
+      ]
+    },
+    {
+      "name": "05 - Finish Admin CRUD",
+      "item": [
+        {
+          "name": "DELETE - deactivate standalone employee record",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Admin deactivation returns 204', function () { pm.response.to.have.status(204); });"] } }],
+          "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/employees/{{createdEmployeeId}}" }
+        }
+      ]
+    },
+    {
+      "name": "06 - Employee Documents (Local Multer Storage)",
+      "item": [
+        {
+          "name": "POST - upload employee PDF document",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Document upload returns 201', function () { pm.response.to.have.status(201); });", "const body = pm.response.json();", "pm.test('Response contains safe document metadata', function () { pm.expect(body.data).to.have.property('id'); pm.expect(body.data).not.to.have.property('objectKey'); });", "pm.collectionVariables.set('documentId', body.data.id);"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": "{{documentFile}}" }] },
+            "url": "{{baseUrl}}/api/v1/employees/{{accountEmployeeId}}/documents"
+          }
+        },
+        {
+          "name": "POST - reject unsupported file type",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Unsupported upload returns 400', function () { pm.response.to.have.status(400); });", "pm.test('Validation response contains request ID', function () { pm.expect(pm.response.json().error).to.have.property('requestId'); });"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": "{{invalidDocumentFile}}" }] },
+            "url": "{{baseUrl}}/api/v1/employees/{{accountEmployeeId}}/documents"
+          }
+        },
+        {
+          "name": "GET - list employee documents",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Document list returns 200', function () { pm.response.to.have.status(200); });", "pm.test('Document list is an array', function () { pm.expect(pm.response.json().data).to.be.an('array'); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/employees/{{accountEmployeeId}}/documents" }
+        },
+        {
+          "name": "GET - create authorized short-lived download URL",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Download URL returns 200', function () { pm.response.to.have.status(200); });", "const data = pm.response.json().data;", "pm.test('Download URL expires in five minutes', function () { pm.expect(data.expiresInSeconds).to.eql(300); });", "pm.collectionVariables.set('downloadUrl', data.downloadUrl);"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/documents/{{documentId}}/download-url" }
+        },
+        {
+          "name": "GET - download using short-lived URL",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Signed download returns 200', function () { pm.response.to.have.status(200); });"] } }],
+          "request": { "method": "GET", "url": "{{downloadUrl}}" }
+        },
+        {
+          "name": "DELETE - soft-delete document",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Document deletion returns 204', function () { pm.response.to.have.status(204); });"] } }],
+          "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/documents/{{documentId}}" }
+        }
+      ]
+    }
+  ]
+}
