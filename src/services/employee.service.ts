@@ -5,10 +5,12 @@ import { Department } from '../entities/department.entity';
 import { Employee } from '../entities/employee.entity';
 import { RefreshToken } from '../entities/refresh-token.entity';
 import { User } from '../entities/user.entity';
+import { EmployeeDto, toEmployeeDto } from '../dto/employee.dto';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/app-error';
 import { env } from '../config/env';
 import { EmployeeListFilters, EmployeeRepository } from '../repositories/employee.repository';
 import { UserRepository } from '../repositories/user.repository';
+import { writeAuditLog } from '../utils/write-audit-log';
 import {
   CreateEmployeeInput,
   UpdateEmployeeInput,
@@ -21,12 +23,6 @@ export interface EmployeeActor {
   employeeId: string;
 }
 
-type EmployeeView = Employee & {
-  firstName: string | null;
-  lastName: string | null;
-  workEmail: string | null;
-};
-
 export class EmployeeService {
   constructor(
     private readonly employees: Repository<Employee>,
@@ -35,14 +31,26 @@ export class EmployeeService {
     private readonly userRepository: UserRepository,
   ) {}
 
-  list(filters: EmployeeListFilters, actor: EmployeeActor) {
-    return EmployeeRepository.list(this.employees, {
+  async list(filters: EmployeeListFilters, actor: EmployeeActor) {
+    const result = await EmployeeRepository.list(this.employees, {
       ...filters,
       scope: { role: actor.role, employeeId: actor.employeeId },
     });
+    const data = result.data.map((employee) =>
+      toEmployeeDto(employee, {
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        workEmail: employee.workEmail,
+      }),
+    );
+    return { data, pagination: result.pagination };
   }
 
-  async create(input: CreateEmployeeInput): Promise<EmployeeView> {
+  async create(
+    input: CreateEmployeeInput,
+    actorUserId: string,
+    requestId: string,
+  ): Promise<EmployeeDto> {
     if (!(await this.departments.exists({ where: { id: input.departmentId } }))) {
       throw new NotFoundError('Department not found');
     }
@@ -60,11 +68,17 @@ export class EmployeeService {
       jobTitle: input.jobTitle,
       joiningDate: input.joiningDate,
       roleName: 'employee',
+      audit: {
+        actorUserId,
+        action: 'employee.create',
+        resourceType: 'employee',
+        requestId,
+      },
     });
     return this.withIdentity(await this.requireEmployee(user.employeeId));
   }
 
-  async getById(id: string, actor: EmployeeActor): Promise<EmployeeView> {
+  async getById(id: string, actor: EmployeeActor): Promise<EmployeeDto> {
     const employee = await this.requireEmployee(id);
     this.ensureRecordAccess(employee, actor);
     return this.withIdentity(employee);
@@ -74,7 +88,8 @@ export class EmployeeService {
     id: string,
     input: UpdateEmployeeInput,
     actor: EmployeeActor,
-  ): Promise<EmployeeView> {
+    requestId: string,
+  ): Promise<EmployeeDto> {
     const employee = await this.requireEmployee(id);
     if (actor.role === 'manager' && employee.id === actor.employeeId) {
       throw new ForbiddenError('Managers must update their own profile through /me');
@@ -104,15 +119,22 @@ export class EmployeeService {
         if (workEmail !== undefined) user.email = workEmail;
         await manager.save(User, user);
       }
+      await writeAuditLog(manager, {
+        actorUserId: actor.id,
+        action: 'employee.update',
+        resourceType: 'employee',
+        resourceId: id,
+        requestId,
+      });
     });
     if (employmentStatus === 'inactive') {
-      await this.deactivate(id, actor);
+      await this.deactivate(id, actor, requestId);
       return this.withIdentity(await this.requireEmployee(id));
     }
     return this.withIdentity(employee);
   }
 
-  async deactivate(id: string, actor: EmployeeActor): Promise<void> {
+  async deactivate(id: string, actor: EmployeeActor, requestId: string): Promise<void> {
     const employee = await this.requireEmployee(id);
     this.ensureRecordAccess(employee, actor);
 
@@ -132,17 +154,25 @@ export class EmployeeService {
           { revokedAt: new Date() },
         );
       }
+      await writeAuditLog(manager, {
+        actorUserId: actor.id,
+        action: 'employee.deactivate',
+        resourceType: 'employee',
+        resourceId: id,
+        requestId,
+      });
     });
   }
 
-  async getOwnProfile(actor: EmployeeActor): Promise<EmployeeView> {
+  async getOwnProfile(actor: EmployeeActor): Promise<EmployeeDto> {
     return this.withIdentity(await this.requireEmployee(actor.employeeId));
   }
 
   async updateOwnProfile(
     actor: EmployeeActor,
     input: UpdateOwnEmployeeProfileInput,
-  ): Promise<EmployeeView> {
+    requestId: string,
+  ): Promise<EmployeeDto> {
     const employee = await this.requireEmployee(actor.employeeId);
     if (input.phone !== undefined) employee.phone = input.phone;
     await this.employees.manager.transaction(async (manager) => {
@@ -152,6 +182,13 @@ export class EmployeeService {
       if (input.firstName !== undefined) user.firstName = input.firstName;
       if (input.lastName !== undefined) user.lastName = input.lastName;
       await manager.save(User, user);
+      await writeAuditLog(manager, {
+        actorUserId: actor.id,
+        action: 'employee.update',
+        resourceType: 'employee',
+        resourceId: employee.id,
+        requestId,
+      });
     });
     return this.withIdentity(employee);
   }
@@ -162,14 +199,13 @@ export class EmployeeService {
     return employee;
   }
 
-  private async withIdentity(employee: Employee): Promise<EmployeeView> {
+  private async withIdentity(employee: Employee): Promise<EmployeeDto> {
     const user = await this.users.findOneBy({ employeeId: employee.id });
-    return {
-      ...employee,
+    return toEmployeeDto(employee, {
       firstName: user?.firstName ?? null,
       lastName: user?.lastName ?? null,
       workEmail: user?.email ?? null,
-    };
+    });
   }
 
   private ensureRecordAccess(employee: Employee, actor: EmployeeActor): void {

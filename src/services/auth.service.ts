@@ -184,14 +184,18 @@ export class AuthService {
     await this.refreshTokens.revokeAllForUser(userId);
   }
 
-    async register(input: {
+    async register(
+      input: {
     firstName: string;
     lastName: string;
     email: string;
     password: string;
     departmentId: string;
     jobTitle: string;
-  }): Promise<{ id: string; email: string }> {
+    },
+    actorUserId: string,
+    requestId: string,
+  ): Promise<{ id: string; email: string }> {
     const passwordHash = await bcrypt.hash(input.password, env.BCRYPT_ROUNDS);
 
     // Role hardcoded hai, client role nahi chun sakta
@@ -203,6 +207,12 @@ export class AuthService {
       jobTitle: input.jobTitle,
       passwordHash,
       roleName: 'employee',
+      audit: {
+        actorUserId,
+        action: 'employee.create',
+        resourceType: 'employee',
+        requestId,
+      },
     });
 
     return { id: user.id, email: user.email };

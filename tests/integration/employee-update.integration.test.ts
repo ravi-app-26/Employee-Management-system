@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import request from 'supertest';
 import { app } from '../../src/app';
+import { AppDataSource } from '../../src/config/database';
 import { createUserByRole } from './helpers';
 
 describe('PATCH /api/v1/employees/:id role restrictions', () => {
@@ -31,6 +32,20 @@ describe('PATCH /api/v1/employees/:id role restrictions', () => {
       firstName: 'Updated',
       jobTitle: 'Senior Engineer',
     });
+    const audit = await AppDataSource.query(
+      `SELECT actor_user_id AS "actorUserId", action, resource_type AS "resourceType",
+              resource_id AS "resourceId"
+       FROM audit_logs WHERE action = 'employee.update' AND resource_id = $1`,
+      [teamMember.employeeId],
+    );
+    expect(audit).toEqual([
+      expect.objectContaining({
+        actorUserId: manager.id,
+        action: 'employee.update',
+        resourceType: 'employee',
+        resourceId: teamMember.employeeId,
+      }),
+    ]);
   });
 
   it('rejects manager updates containing fields outside the team-member schema', async () => {
@@ -63,6 +78,21 @@ describe('PATCH /api/v1/employees/:id role restrictions', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.employmentStatus).toBe('inactive');
+
+    const deactivateAudit = await AppDataSource.query(
+      `SELECT actor_user_id AS "actorUserId", action, resource_type AS "resourceType",
+              resource_id AS "resourceId"
+       FROM audit_logs WHERE action = 'employee.deactivate' AND resource_id = $1`,
+      [employee.employeeId],
+    );
+    expect(deactivateAudit).toEqual([
+      expect.objectContaining({
+        actorUserId: admin.id,
+        action: 'employee.deactivate',
+        resourceType: 'employee',
+        resourceId: employee.employeeId,
+      }),
+    ]);
 
     const loginResponse = await request(app)
       .post('/api/v1/auth/login')

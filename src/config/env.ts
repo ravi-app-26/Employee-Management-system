@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { z } from 'zod';
+import { logger } from './logger';
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -37,9 +38,9 @@ const schema = z.object({
 const parsed = schema.safeParse(process.env);//environment variables (.env) ko Zod schema ke according validate karna, bina error throw kiye.
 
 if (!parsed.success) {
-  console.error('Invalid environment configuration:');
+  logger.error('Invalid environment configuration');
   for (const issue of parsed.error.issues) {//validation ki saari errors deta hai.
-    console.error(` - ${issue.path.join('.')}: ${issue.message}`);
+    logger.error({ configPath: issue.path.join('.'), validationMessage: issue.message });
   }
   process.exit(1);//if configuration is wrong app closed
 }

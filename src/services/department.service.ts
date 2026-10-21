@@ -1,26 +1,26 @@
 import { NotFoundError } from '../errors/app-error';
 import { Department } from '../entities/department.entity';
 import { DepartmentRepository } from '../repositories/department.repository';
+import { DepartmentDto, toDepartmentDto } from '../dto/department.dto';
 
 export class DepartmentService {
   constructor(private readonly repo: DepartmentRepository) {}
 
-  create(input: { name: string; description?: string }): Promise<Department> {
-    return this.repo.create(input);
+  async create(input: { name: string; description?: string }): Promise<DepartmentDto> {
+    return toDepartmentDto(await this.repo.create(input));
   }
 
- // ...existing code...
-  list(page: number, limit: number) {
-    return this.repo.findAll(page, limit);
+  async list(page: number, limit: number) {
+    const result = await this.repo.findAll(page, limit);
+    return { ...result, data: result.data.map(toDepartmentDto) };
   }
-// ...existing code...
 
   async update(
     id: string,
     input: { name?: string; description?: string | null },
-  ): Promise<Department> {
+  ): Promise<DepartmentDto> {
     const updated = await this.repo.update(id, input);
     if (!updated) throw new NotFoundError('Department not found');
-    return updated;
+    return toDepartmentDto(updated);
   }
 }

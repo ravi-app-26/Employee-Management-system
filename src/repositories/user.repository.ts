@@ -2,6 +2,7 @@ import { DataSource, Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { Employee } from '../entities/employee.entity';
 import { Role } from '../entities/role.entity';
+import { writeAuditLog } from '../utils/write-audit-log';
 export class UserRepository {
   private readonly repo: Repository<User>;
 
@@ -78,6 +79,12 @@ export class UserRepository {
     phone?: string | null;
     managerId?: string | null;
     joiningDate?: string;
+      audit?: {
+        actorUserId: string;
+        action: string;
+        resourceType: string;
+        requestId: string;
+      };
   }): Promise<User> {
     return this.repo.manager.transaction(async (tx) => {
       const role = await tx.findOneByOrFail(Role, { name: data.roleName });
@@ -91,6 +98,13 @@ export class UserRepository {
           joiningDate: data.joiningDate ?? new Date().toISOString().slice(0, 10),
         }),
       );
+
+      if (data.audit) {
+        await writeAuditLog(tx, {
+          ...data.audit,
+          resourceId: employee.id,
+        });
+      }
 
       return tx.save(
         tx.create(User, {

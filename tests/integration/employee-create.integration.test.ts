@@ -35,6 +35,20 @@ describe('POST /api/v1/employees', () => {
       lastName: 'Patel',
       workEmail,
     });
+    const createdAudit = await AppDataSource.query(
+      `SELECT actor_user_id AS "actorUserId", action, resource_type AS "resourceType",
+              resource_id AS "resourceId", request_id AS "requestId"
+       FROM audit_logs WHERE action = 'employee.create' AND resource_id = $1`,
+      [createResponse.body.data.id],
+    );
+    expect(createdAudit).toEqual([
+      expect.objectContaining({
+        actorUserId: admin.id,
+        action: 'employee.create',
+        resourceType: 'employee',
+        resourceId: createResponse.body.data.id,
+      }),
+    ]);
 
     const listResponse = await request(app)
       .get('/api/v1/employees')

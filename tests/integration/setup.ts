@@ -29,7 +29,12 @@ beforeEach(async () => {
       ('employee:create'),
       ('employee:read'),
       ('employee:update'),
-      ('profile:read_own')
+      ('employee:deactivate'),
+      ('user:assign_role'),
+      ('session:revoke_any'),
+      ('profile:read_own'),
+      ('profile:update_own'),
+      ('profile:export_own')
   `);
   await AppDataSource.query(`
     INSERT INTO role_permissions (role_id, permission_id)
@@ -38,7 +43,12 @@ beforeEach(async () => {
      WHERE (permissions.name = 'employee:create' AND roles.name IN ('admin', 'hr'))
        OR (permissions.name = 'employee:read' AND roles.name IN ('admin', 'hr', 'manager'))
        OR (permissions.name = 'employee:update' AND roles.name IN ('admin', 'hr', 'manager'))
+      OR (permissions.name = 'employee:deactivate' AND roles.name = 'admin')
+      OR (permissions.name = 'user:assign_role' AND roles.name = 'admin')
+      OR (permissions.name = 'session:revoke_any' AND roles.name = 'admin')
        OR permissions.name = 'profile:read_own'
+      OR permissions.name = 'profile:update_own'
+      OR permissions.name = 'profile:export_own'
   `);
 });
 
