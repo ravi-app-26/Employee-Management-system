@@ -485,7 +485,7 @@ paths:
       tags: [Employees]
       operationId: createEmployee
       summary: Create an employee record
-      description: Creates an employee record only; it does not create a login account.
+      description: Creates an employee record and its employee login identity in one transaction. If password is omitted, a random password hash is stored and the generated password is not returned.
       security:
         - bearerAuth: []
       x-required-roles: [admin, hr]
@@ -1213,8 +1213,25 @@ components:
     CreateEmployeeRequest:
       type: object
       additionalProperties: false
-      required: [departmentId, jobTitle, joiningDate]
+      required: [firstName, lastName, workEmail, departmentId, jobTitle]
       properties:
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        workEmail:
+          type: string
+          format: email
+          maxLength: 255
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          description: Optional initial password. If omitted, a random password is generated and not returned.
         phone:
           type: string
           pattern: '^[+0-9 ()-]{6,30}$'

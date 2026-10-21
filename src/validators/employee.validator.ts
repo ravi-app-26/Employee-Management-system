@@ -20,11 +20,15 @@ const phone = z.string().trim().regex(/^[+0-9 ()-]{6,30}$/, 'Invalid phone numbe
 
 export const createEmployeeSchema = z
   .object({
+    firstName: z.string().trim().min(1).max(80),
+    lastName: z.string().trim().min(1).max(80),
+    workEmail: z.string().trim().toLowerCase().email().max(255),
+    password: z.string().min(8).max(72).optional(),
     phone: phone.optional(),
     departmentId: z.string().uuid(),
     managerId: z.string().uuid().optional(),
     jobTitle: z.string().trim().min(1).max(100),
-    joiningDate: isoDate,
+    joiningDate: isoDate.optional(),
   })
   .strict();
 

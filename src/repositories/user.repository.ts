@@ -75,6 +75,9 @@ export class UserRepository {
     departmentId: string;
     jobTitle: string;
     roleName: string;
+    phone?: string | null;
+    managerId?: string | null;
+    joiningDate?: string;
   }): Promise<User> {
     return this.repo.manager.transaction(async (tx) => {
       const role = await tx.findOneByOrFail(Role, { name: data.roleName });
@@ -82,8 +85,10 @@ export class UserRepository {
       const employee = await tx.save(
         tx.create(Employee, {
           departmentId: data.departmentId,
+          phone: data.phone ?? null,
+          managerId: data.managerId ?? null,
           jobTitle: data.jobTitle,
-          joiningDate: new Date().toISOString().slice(0, 10),
+          joiningDate: data.joiningDate ?? new Date().toISOString().slice(0, 10),
         }),
       );
 

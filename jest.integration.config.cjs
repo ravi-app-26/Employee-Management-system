@@ -10,7 +10,10 @@ module.exports = {
     '^.+\\.tsx?$': [
       'babel-jest',
       {
-        plugins: [['@babel/plugin-proposal-decorators', { version: 'legacy' }]],
+        plugins: [
+          ['@babel/plugin-proposal-decorators', { version: 'legacy' }],
+          '@babel/plugin-transform-class-properties',
+        ],
         presets: [
           ['@babel/preset-env', { targets: { node: 'current' } }],
           '@babel/preset-typescript',

@@ -1,10 +1,14 @@
 import { IsNull, Repository } from 'typeorm';
+import bcrypt from 'bcrypt';
+import { randomBytes } from 'node:crypto';
 import { Department } from '../entities/department.entity';
 import { Employee } from '../entities/employee.entity';
 import { RefreshToken } from '../entities/refresh-token.entity';
 import { User } from '../entities/user.entity';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/app-error';
+import { env } from '../config/env';
 import { EmployeeListFilters, EmployeeRepository } from '../repositories/employee.repository';
+import { UserRepository } from '../repositories/user.repository';
 import {
   CreateEmployeeInput,
   UpdateEmployeeInput,
@@ -28,6 +32,7 @@ export class EmployeeService {
     private readonly employees: Repository<Employee>,
     private readonly departments: Repository<Department>,
     private readonly users: Repository<User>,
+    private readonly userRepository: UserRepository,
   ) {}
 
   list(filters: EmployeeListFilters, actor: EmployeeActor) {
@@ -43,12 +48,20 @@ export class EmployeeService {
     }
     if (input.managerId) await this.requireEmployee(input.managerId);
 
-    const employee = this.employees.create({
-      ...input,
-      phone: input.phone ?? null,
+    const password = input.password ?? randomBytes(32).toString('base64url');
+    const user = await this.userRepository.createEmployeeWithUser({
+      firstName: input.firstName,
+      lastName: input.lastName,
+      email: input.workEmail,
+      passwordHash: await bcrypt.hash(password, env.BCRYPT_ROUNDS),
+      departmentId: input.departmentId,
       managerId: input.managerId ?? null,
+      phone: input.phone ?? null,
+      jobTitle: input.jobTitle,
+      joiningDate: input.joiningDate,
+      roleName: 'employee',
     });
-    return this.withIdentity(await this.employees.save(employee));
+    return this.withIdentity(await this.requireEmployee(user.employeeId));
   }
 
   async getById(id: string, actor: EmployeeActor): Promise<EmployeeView> {

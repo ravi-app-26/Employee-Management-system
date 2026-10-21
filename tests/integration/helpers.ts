@@ -45,6 +45,7 @@ export async function createUserByRole(
 
   const login = await request(app)
     .post('/api/v1/auth/login')
+    .set('X-Forwarded-For', `198.51.100.${Math.floor(Math.random() * 200) + 1}`)
     .send({ email, password });
 
   if (login.status !== 200) {

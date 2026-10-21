@@ -35,6 +35,7 @@ const employeeService = new EmployeeService(
 	AppDataSource.getRepository(Employee),
 	AppDataSource.getRepository(Department),
 	AppDataSource.getRepository(User),
+	userRepository,
 );
 export const employeeController = new EmployeeController(employeeService);
 export const employeeDocumentService = new EmployeeDocumentService(
