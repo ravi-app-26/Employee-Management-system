@@ -89,8 +89,11 @@ export class EmployeeService {
       await this.requireEmployee(input.managerId);
     }
 
-    const { firstName, lastName, workEmail, ...employeeFields } = input;
+    const { firstName, lastName, workEmail, employmentStatus, ...employeeFields } = input;
     Object.assign(employee, employeeFields);
+    if (employmentStatus !== undefined && employmentStatus !== 'inactive') {
+      employee.employmentStatus = employmentStatus;
+    }
     await this.employees.manager.transaction(async (manager) => {
       await manager.save(Employee, employee);
       if (firstName !== undefined || lastName !== undefined || workEmail !== undefined) {
@@ -102,6 +105,10 @@ export class EmployeeService {
         await manager.save(User, user);
       }
     });
+    if (employmentStatus === 'inactive') {
+      await this.deactivate(id, actor);
+      return this.withIdentity(await this.requireEmployee(id));
+    }
     return this.withIdentity(employee);
   }
 

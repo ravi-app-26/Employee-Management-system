@@ -63,5 +63,15 @@ describe('PATCH /api/v1/employees/:id role restrictions', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.employmentStatus).toBe('inactive');
+
+    const loginResponse = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: employee.email, password: employee.password });
+    expect(loginResponse.status).toBe(401);
+
+    const existingTokenResponse = await request(app)
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${employee.accessToken}`);
+    expect(existingTokenResponse.status).toBe(401);
   });
 });
