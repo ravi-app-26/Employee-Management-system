@@ -122,9 +122,15 @@ export class AuthService {
       throw new UnauthorizedError('Invalid refresh token');
     }
 
-    // ROTATION: purana revoke, naya issue (same family)
-    await this.refreshTokens.revoke(stored.id);
-    const refreshToken = await this.issueRefreshToken(user.id, stored.familyId);
+    // Revoke the old token and persist its replacement atomically.
+    const refreshToken = randomBytes(48).toString('hex');
+    const rotated = await this.refreshTokens.rotate(stored.id, stored.familyId, {
+      userId: user.id,
+      tokenHash: this.hashToken(refreshToken),
+      expiresAt: new Date(Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000),
+    });
+    if (!rotated) throw new UnauthorizedError('Invalid refresh token');
+
     const accessToken = this.signAccessToken({
       sub: user.id,
       role: user.role.name,

@@ -22,4 +22,20 @@ describe('authentication integration', () => {
     });
     expect(user.refreshCookie).toContain('refresh_token=');
   });
+
+  it('allows only one of two simultaneous refreshes and rejects token reuse', async () => {
+    const user = await createUserByRole('employee');
+    const refreshCookie = user.refreshCookie.split(';', 1)[0];
+
+    const responses = await Promise.all([
+      request(app).post('/api/v1/auth/refresh').set('Cookie', refreshCookie),
+      request(app).post('/api/v1/auth/refresh').set('Cookie', refreshCookie),
+    ]);
+
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 401]);
+    expect(responses.filter((response) => response.status === 200)).toHaveLength(1);
+    expect(responses.find((response) => response.status === 401)?.body.error.code).toBe(
+      'UNAUTHORIZED',
+    );
+  });
 });
