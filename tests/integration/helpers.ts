@@ -14,7 +14,7 @@ export interface AuthenticatedTestUser {
 
 export async function createUserByRole(
   role: string,
-  overrides: { email?: string; password?: string } = {},
+  overrides: { email?: string; password?: string; managerId?: string } = {},
 ): Promise<AuthenticatedTestUser> {
   const email = overrides.email ?? `${role}-${crypto.randomUUID()}@example.test`;
   const password = overrides.password ?? 'IntegrationPass#123';
@@ -29,10 +29,10 @@ export async function createUserByRole(
     [`Integration ${crypto.randomUUID()}`],
   );
   const employeeRows: Array<{ id: string }> = await AppDataSource.query(
-    `INSERT INTO employees (department_id, job_title, joining_date)
-     VALUES ($1, $2, CURRENT_DATE)
+    `INSERT INTO employees (department_id, manager_id, job_title, joining_date)
+     VALUES ($1, $2, $3, CURRENT_DATE)
      RETURNING id`,
-    [departmentRows[0].id, 'Integration Test User'],
+    [departmentRows[0].id, overrides.managerId ?? null, 'Integration Test User'],
   );
   const passwordHash = await bcrypt.hash(password, 4);
   const userRows: Array<{ id: string }> = await AppDataSource.query(

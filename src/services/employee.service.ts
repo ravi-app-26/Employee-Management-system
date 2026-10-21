@@ -3,7 +3,7 @@ import { Department } from '../entities/department.entity';
 import { Employee } from '../entities/employee.entity';
 import { RefreshToken } from '../entities/refresh-token.entity';
 import { User } from '../entities/user.entity';
-import { BadRequestError, NotFoundError } from '../errors/app-error';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/app-error';
 import { EmployeeListFilters, EmployeeRepository } from '../repositories/employee.repository';
 import {
   CreateEmployeeInput,
@@ -63,6 +63,9 @@ export class EmployeeService {
     actor: EmployeeActor,
   ): Promise<EmployeeView> {
     const employee = await this.requireEmployee(id);
+    if (actor.role === 'manager' && employee.id === actor.employeeId) {
+      throw new ForbiddenError('Managers must update their own profile through /me');
+    }
     this.ensureRecordAccess(employee, actor);
 
     if (input.departmentId && !(await this.departments.exists({ where: { id: input.departmentId } }))) {

@@ -44,6 +44,18 @@ export const updateEmployeeSchema = z
   .strict()
   .refine((v) => Object.keys(v).length > 0, { message: 'At least one field is required' });
 
+export const updateTeamMemberSchema = z
+  .object({
+    firstName: z.string().trim().min(1).max(80),
+    lastName: z.string().trim().min(1).max(80),
+    phone: phone.nullable(),
+    jobTitle: z.string().trim().min(1).max(100),
+    joiningDate: isoDate,
+  })
+  .partial()
+  .strict()
+  .refine((v) => Object.keys(v).length > 0, { message: 'At least one field is required' });
+
 export const updateOwnEmployeeProfileSchema = z
   .object({
     firstName: z.string().trim().min(1).max(80).optional(),
@@ -55,6 +67,7 @@ export const updateOwnEmployeeProfileSchema = z
 
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
+export type UpdateTeamMemberInput = z.infer<typeof updateTeamMemberSchema>;
 export type UpdateOwnEmployeeProfileInput = z.infer<typeof updateOwnEmployeeProfileSchema>;
 
 export const listEmployeesQuerySchema = z

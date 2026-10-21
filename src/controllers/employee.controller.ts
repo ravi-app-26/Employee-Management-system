@@ -6,6 +6,7 @@ import {
   listEmployeesQuerySchema,
   updateEmployeeSchema,
   updateOwnEmployeeProfileSchema,
+  updateTeamMemberSchema,
 } from '../validators/employee.validator';
 
 export class EmployeeController {
@@ -29,7 +30,9 @@ export class EmployeeController {
   };
 
   update = async (req: Request, res: Response) => {
-    const input = updateEmployeeSchema.parse(req.body);
+    const input = req.user!.role === 'manager'
+      ? updateTeamMemberSchema.parse(req.body)
+      : updateEmployeeSchema.parse(req.body);
     ApiResponse.ok(
       res,
       await this.service.update(String(req.params.id), input, req.user!),
