@@ -5,6 +5,35 @@
     "description": "Covers every mounted API route. Run requests in order with Collection Runner. Requires the API running and seeded admin account. Test data is created with a unique run ID; a dedicated employee account is used for password/session operations.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const url = pm.request.url.toString();",
+          "const contentType = pm.response.headers.get('Content-Type') || '';",
+          "pm.test('Response body matches the documented API envelope', function () {",
+          "  if (pm.response.code === 204) { pm.expect(pm.response.text()).to.eql(''); return; }",
+          "  if (url.includes('/health')) { pm.expect(pm.response.json().status).to.be.a('string'); return; }",
+          "  if (!contentType.includes('application/json')) return;",
+          "  const body = pm.response.json();",
+          "  if (pm.response.code >= 400) {",
+          "    pm.expect(body.success).to.eql(false);",
+          "    pm.expect(body.error).to.be.an('object');",
+          "    pm.expect(body.error.code).to.be.a('string');",
+          "    pm.expect(body.error.message).to.be.a('string');",
+          "    pm.expect(body.error.requestId).to.be.a('string');",
+          "  } else {",
+          "    pm.expect(body.success).to.eql(true);",
+          "    pm.expect(body.requestId).to.be.a('string');",
+    "    pm.expect(body).to.have.property('data');",
+          "  }",
+          "});"
+        ]
+      }
+    }
+  ],
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:3000" },
     { "key": "devPassword", "value": "DevPass#12345" },
@@ -75,8 +104,8 @@
       "item": [
         {
           "name": "GET - list departments",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Department list returns 200', function () { pm.response.to.have.status(200); });"] } }],
-          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/departments?page=1&limit=20" }
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Department list returns 200', function () { pm.response.to.have.status(200); });", "const result = pm.response.json().data;", "pm.test('Department list has data and pagination schema', function () { pm.expect(result.data).to.be.an('array'); pm.expect(result.pagination).to.include.all.keys('page', 'limit', 'total', 'totalPages'); });", "const names = result.data.map((department) => department.name);", "pm.test('Departments are sorted by name ascending', function () { pm.expect(names).to.eql([...names].sort((left, right) => left.localeCompare(right))); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/departments?page=1&limit=20&sortBy=name&order=asc" }
         },
         {
           "name": "POST - create test department",
@@ -342,6 +371,31 @@
           "name": "DELETE - soft-delete document",
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Document deletion returns 204', function () { pm.response.to.have.status(204); });"] } }],
           "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/documents/{{documentId}}" }
+        }
+      ]
+    },
+    {
+      "name": "07 - User Administration and Data Export",
+      "item": [
+        {
+          "name": "GET - export own profile data",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Own profile export returns 200', function () { pm.response.to.have.status(200); });", "const data = pm.response.json().data;", "pm.test('Export contains user and employee DTOs, not secrets', function () { pm.expect(data.user).to.include.all.keys('id', 'email', 'role', 'isActive', 'createdAt', 'updatedAt'); pm.expect(data.employee).to.include.all.keys('id', 'firstName', 'lastName', 'workEmail', 'departmentId'); pm.expect(data.user).not.to.have.property('passwordHash'); pm.expect(data).not.to.have.property('refreshToken'); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }], "url": "{{baseUrl}}/api/v1/me/export" }
+        },
+        {
+          "name": "POST - revoke all sessions for test user (admin)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Admin revokes user sessions with 204', function () { pm.response.to.have.status(204); pm.expect(pm.response.text()).to.eql(''); });"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/users/{{accountUserId}}/sessions/revoke" }
+        },
+        {
+          "name": "PATCH - assign manager role to test user (admin)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Admin assigns role with 200', function () { pm.response.to.have.status(200); });", "const body = pm.response.json();", "pm.test('Role assignment response schema is valid', function () { pm.expect(body.data).to.eql({ id: pm.collectionVariables.get('accountUserId'), role: 'manager' }); });"] } }],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"role\": \"manager\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/users/{{accountUserId}}/role"
+          }
         }
       ]
     }

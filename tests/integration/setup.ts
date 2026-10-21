@@ -30,6 +30,9 @@ beforeEach(async () => {
       ('employee:read'),
       ('employee:update'),
       ('employee:deactivate'),
+      ('department:create'),
+      ('department:read'),
+      ('department:update'),
       ('user:assign_role'),
       ('session:revoke_any'),
       ('profile:read_own'),
@@ -44,6 +47,9 @@ beforeEach(async () => {
        OR (permissions.name = 'employee:read' AND roles.name IN ('admin', 'hr', 'manager'))
        OR (permissions.name = 'employee:update' AND roles.name IN ('admin', 'hr', 'manager'))
       OR (permissions.name = 'employee:deactivate' AND roles.name = 'admin')
+      OR (permissions.name = 'department:create' AND roles.name = 'admin')
+      OR (permissions.name = 'department:read' AND roles.name = 'admin')
+      OR (permissions.name = 'department:update' AND roles.name = 'admin')
       OR (permissions.name = 'user:assign_role' AND roles.name = 'admin')
       OR (permissions.name = 'session:revoke_any' AND roles.name = 'admin')
        OR permissions.name = 'profile:read_own'

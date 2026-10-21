@@ -12,7 +12,10 @@ export class DepartmentController {
 
   list = async (req: Request, res: Response) => {
     const query = listDepartmentsQuerySchema.parse(req.query);
-    ApiResponse.ok(res, await this.service.list(query.page, query.limit));
+    ApiResponse.ok(
+      res,
+      await this.service.list(query.page, query.limit, query.sortBy, query.order),
+    );
   };
 
   update = async (req: Request, res: Response) => {
