@@ -1,0 +1,19 @@
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: employee_management_test
+      POSTGRES_USER: employee_test
+      POSTGRES_PASSWORD: employee_test
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U employee_test -d employee_management_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - employee-management-test-data:/var/lib/postgresql/data
+
+volumes:
+  employee-management-test-data:
