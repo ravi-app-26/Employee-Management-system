@@ -3,6 +3,7 @@ import { AuthController } from '../controllers/auth.controller';
 import { RequestValidationMiddleware } from '../middlewares/validate-request';
 import { AuthorizationMiddleware } from '../middlewares/authorize';
 import { AuthorizationService } from '../services/authorization.service';
+import { RateLimitMiddleware } from '../middlewares/rate-limiter';
 import {
   changePasswordSchema,
   loginSchema,
@@ -22,8 +23,8 @@ export class AuthRoutes {
     RequestValidationMiddleware.body(registerSchema),
     ctrl.register,
   );
-  router.post('/login', RequestValidationMiddleware.body(loginSchema), ctrl.login);
-  router.post('/refresh', ctrl.refresh);
+  router.post('/login', RateLimitMiddleware.auth, RequestValidationMiddleware.body(loginSchema), ctrl.login);
+  router.post('/refresh', RateLimitMiddleware.auth, ctrl.refresh);
   router.post('/logout', ctrl.logout);
   router.post('/logout-all', authenticate, ctrl.logoutAll);
   router.get('/sessions', authenticate, ctrl.sessions);
@@ -36,6 +37,7 @@ export class AuthRoutes {
   router.post(
     '/change-password',
     authenticate,
+    RateLimitMiddleware.auth,
     RequestValidationMiddleware.body(changePasswordSchema),
     ctrl.changePassword,
   );

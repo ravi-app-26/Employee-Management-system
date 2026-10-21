@@ -1,4 +1,6 @@
 process.env.NODE_ENV = 'test';
+process.env.CORS_ORIGINS = 'https://client.example.test, https://admin.example.test';
+process.env.TRUST_PROXY = 'true';
 process.env.DATABASE_URL =
   'postgresql://employee_test:employee_test@127.0.0.1:55432/employee_management_test';
 process.env.JWT_ACCESS_SECRET =
