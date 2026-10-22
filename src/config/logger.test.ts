@@ -25,7 +25,12 @@ describe('logger secret redaction', () => {
       req: {
         headers: { authorization: 'Bearer request-header-secret' },
         cookies: { refresh_token: 'cookie-refresh-secret' },
+        body: {
+          password: 'request-body-password',
+          refreshToken: 'request-body-refresh-token',
+        },
       },
+      request: { body: { accessToken: 'nested-access-token' } },
     });
 
     expect(output).not.toContain('plain-password');
@@ -35,6 +40,9 @@ describe('logger secret redaction', () => {
     expect(output).not.toContain('refresh-secret');
     expect(output).not.toContain('header-secret');
     expect(output).not.toContain('cookie-refresh-secret');
+    expect(output).not.toContain('request-body-password');
+    expect(output).not.toContain('request-body-refresh-token');
+    expect(output).not.toContain('nested-access-token');
     expect(output).toContain('[REDACTED]');
   });
 });

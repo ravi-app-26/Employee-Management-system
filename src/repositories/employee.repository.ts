@@ -79,8 +79,8 @@ export class EmployeeRepository {
   query
     .orderBy(SORT_COLUMNS[filters.sortBy], filters.order.toUpperCase() as 'ASC' | 'DESC')
     .addOrderBy('e.id', 'ASC')
-    .skip((filters.page - 1) * filters.limit)
-    .take(filters.limit);
+    .offset((filters.page - 1) * filters.limit)
+    .limit(filters.limit);
 
   const { raw, entities: employees } = await query.getRawAndEntities();
   const total = await query.getCount();
