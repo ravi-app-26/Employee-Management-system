@@ -1,11 +1,14 @@
 import { afterAll, beforeAll, beforeEach } from '@jest/globals';
 import { AppDataSource } from '../../src/config/database';
+import { RateLimitMiddleware } from '../../src/middlewares/rate-limiter';
 
 beforeAll(async () => {
   await AppDataSource.initialize();
 });
 
 beforeEach(async () => {
+  RateLimitMiddleware.auth.resetKey('::ffff:127.0.0.1');
+
   await AppDataSource.query(`
     TRUNCATE TABLE
       audit_logs,

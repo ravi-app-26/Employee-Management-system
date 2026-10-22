@@ -8,15 +8,7 @@ const schema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:5173').transform((value) =>
     value.split(',').map((origin) => origin.trim()).filter(Boolean),
   ),
-  TRUST_PROXY: z.string().default('false').transform((value) => {
-    if (value === 'true') return true;
-    if (value === 'false') return false;
-    const hops = Number(value);
-    return Number.isInteger(hops) && hops >= 0 ? hops : value;
-  }).refine(
-    (value) => typeof value === 'boolean' || typeof value === 'number',
-    'TRUST_PROXY must be true, false, or a non-negative hop count',
-  ),
+  TRUST_PROXY: z.coerce.number().int().nonnegative().default(0),
   DATABASE_URL: z.string().min(1),
   JWT_ACCESS_SECRET: z.string().min(32, 'must be at least 32 characters'),
   JWT_ACCESS_TTL: z.string().default('15m'),

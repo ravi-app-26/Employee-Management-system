@@ -48,7 +48,7 @@ For a production build, run `npm run build` followed by `npm start`. The server 
 | `NODE_ENV` | `development` | Runtime mode; allowed values are development, test, production. |
 | `PORT` | `3000` | HTTP listener port. |
 | `CORS_ORIGINS` | `http://localhost:5173` | Comma-separated allowed origins. |
-| `TRUST_PROXY` | `false` | `true`, `false`, or a non-negative proxy-hop count. Use only the correct deployment value. |
+| `TRUST_PROXY` | `0` | Number of trusted proxy hops. Keep `0` unless the deployment has a known, trusted proxy topology. |
 | `DATABASE_URL` | Required | PostgreSQL connection URL. |
 | `JWT_ACCESS_SECRET` | Required, minimum 32 chars | HS256 JWT signing secret. |
 | `JWT_ACCESS_TTL` | `15m` | Access-token lifetime. |

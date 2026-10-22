@@ -33,14 +33,13 @@ describe('HTTP security configuration', () => {
     expect(response?.status).toBe(200);
   });
 
-  it('limits login to eight requests per minute for one client IP', async () => {
+  it('ignores spoofed forwarded IPs when limiting login requests', async () => {
     const user = await createUserByRole('employee');
-    const clientIp = '198.51.100.42';
 
-    for (let attempt = 0; attempt < 8; attempt += 1) {
+    for (let attempt = 0; attempt < 7; attempt += 1) {
       const response = await request(app)
         .post('/api/v1/auth/login')
-        .set('X-Forwarded-For', clientIp)
+        .set('X-Forwarded-For', `198.51.100.${attempt + 1}`)
         .send({ email: user.email, password: user.password });
 
       expect(response.status).toBe(200);
@@ -48,7 +47,7 @@ describe('HTTP security configuration', () => {
 
     const limitedResponse = await request(app)
       .post('/api/v1/auth/login')
-      .set('X-Forwarded-For', clientIp)
+      .set('X-Forwarded-For', '203.0.113.99')
       .send({ email: user.email, password: user.password });
 
     expect(limitedResponse.status).toBe(429);
