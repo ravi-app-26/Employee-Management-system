@@ -7,7 +7,8 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  RateLimitMiddleware.auth.resetKey('::ffff:127.0.0.1');
+  RateLimitMiddleware.auth.resetKey('127.0.0.1');
+  RateLimitMiddleware.handle.resetKey('127.0.0.1');
 
   await AppDataSource.query(`
     TRUNCATE TABLE

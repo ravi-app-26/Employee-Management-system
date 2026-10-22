@@ -104,4 +104,60 @@ describe('PATCH /api/v1/employees/:id role restrictions', () => {
       .set('Authorization', `Bearer ${employee.accessToken}`);
     expect(existingTokenResponse.status).toBe(401);
   });
+
+  it('allows an admin to deactivate an employee login and audits the target', async () => {
+    const admin = await createUserByRole('admin');
+    const employee = await createUserByRole('employee');
+
+    const response = await request(app)
+      .delete(`/api/v1/employees/${employee.employeeId}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+
+    expect(response.status).toBe(204);
+    const users = await AppDataSource.query(
+      'SELECT is_active AS "isActive" FROM users WHERE id = $1',
+      [employee.id],
+    );
+    expect(users).toEqual([{ isActive: false }]);
+
+    const audit = await AppDataSource.query(
+      `SELECT actor_user_id AS "actorUserId", action, resource_type AS "resourceType",
+              resource_id AS "resourceId"
+       FROM audit_logs WHERE action = 'employee.deactivate' AND resource_id = $1`,
+      [employee.employeeId],
+    );
+    expect(audit).toEqual([
+      expect.objectContaining({
+        actorUserId: admin.id,
+        action: 'employee.deactivate',
+        resourceType: 'employee',
+        resourceId: employee.employeeId,
+      }),
+    ]);
+  });
+
+  it.each(['manager', 'employee'])(
+    'denies %s deactivation of an out-of-scope employee without writing an audit row',
+    async (role) => {
+      const caller = await createUserByRole(role);
+      const target = await createUserByRole('employee');
+
+      const response = await request(app)
+        .delete(`/api/v1/employees/${target.employeeId}`)
+        .set('Authorization', `Bearer ${caller.accessToken}`);
+
+      expect(response.status).toBe(403);
+      const audit = await AppDataSource.query(
+        `SELECT id FROM audit_logs
+         WHERE action = 'employee.deactivate' AND resource_id = $1`,
+        [target.employeeId],
+      );
+      expect(audit).toHaveLength(0);
+      const users = await AppDataSource.query(
+        'SELECT is_active AS "isActive" FROM users WHERE id = $1',
+        [target.id],
+      );
+      expect(users).toEqual([{ isActive: true }]);
+    },
+  );
 });

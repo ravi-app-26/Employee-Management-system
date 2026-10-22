@@ -120,6 +120,10 @@ Constraints include UUID primary keys, unique case-insensitive user/employee wor
 ## API And Security Notes
 
 - API routes are mounted under `/api/v1`; the OpenAPI file is [`docs/openapi.yaml`](docs/openapi.yaml).
+- Additional user endpoints and their access requirements:
+   - `PATCH /users/:id/role` — admin role and `user:assign_role` permission.
+   - `POST /users/:id/sessions/revoke` — `session:revoke_any` permission (admin in the seeded role-permission mapping).
+   - `GET /me/export` — `profile:export_own` permission; exports only the authenticated user's data (granted to all seeded roles).
 - Login returns a short-lived JWT access token and sets an HttpOnly refresh cookie. The cookie is `SameSite=Strict`, scoped to `/api/v1/auth`, and `Secure` in production.
 - Refresh-token values are not stored in the database; only hashes are stored. Rotation is transactional, and reuse revokes the token family.
 - Employee update input is strict/allowlisted. Self-profile writes allow only first name, last name, and phone.
