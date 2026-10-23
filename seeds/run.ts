@@ -25,15 +25,18 @@ const PERMISSIONS: [string, string][] = [
   ['profile:read_own', 'Read own profile'],
   ['profile:update_own', 'Update own profile'],
   ['profile:export_own', 'Export own data'],
+  ['document:upload', 'Upload employee documents'],
+  ['document:read', 'List and download employee documents'],
+  ['document:delete', 'Soft-delete employee documents'],
 ];
 
 const OWN = ['profile:read_own', 'profile:update_own', 'profile:export_own'];
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   admin: PERMISSIONS.map(([name]) => name),
-  hr: ['employee:create', 'employee:read', 'employee:update', 'department:read', ...OWN],
-  manager: ['employee:read', 'employee:update', 'department:read', ...OWN],
-  employee: ['department:read', ...OWN],
+  hr: ['employee:create', 'employee:read', 'employee:update', 'department:read', 'document:upload', 'document:read', 'document:delete', ...OWN],
+  manager: ['employee:read', 'employee:update', 'department:read', 'document:read', ...OWN],
+  employee: ['department:read', 'document:upload', 'document:read', 'document:delete', ...OWN],
 };
 
 const DEPARTMENTS: [string, string][] = [

@@ -1,13 +1,21 @@
 import { Request, Response } from 'express';
-import { EmployeeService } from '../services/employee.service';
+import { EmployeeService } from '../services';
 import { ApiResponse } from '../utils/api-response';
 import {
   createEmployeeSchema,
   listEmployeesQuerySchema,
   updateEmployeeSchema,
   updateOwnEmployeeProfileSchema,
+<<<<<<< Updated upstream
   updateTeamMemberSchema,
+=======
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
 } from '../validators/employee.validator';
+=======
+  updateTeamMemberSchema,
+} from '../validators';
+>>>>>>> Stashed changes
 
 export class EmployeeController {
   constructor(private readonly service: EmployeeService) {}

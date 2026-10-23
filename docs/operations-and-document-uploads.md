@@ -1,14 +1,14 @@
 # Operations and Document Uploads
 
-## Local Upload Setup
+## S3 Upload Setup
 
-Uploads use Multer disk storage only. No AWS, object-storage service, or cloud credentials are used. Configure `UPLOAD_DIR` to a private local directory (default `private-uploads`) and ensure the service account has exclusive access. The app enforces directory mode `0700` and file mode `0600`; do not expose this directory through a web server or static route.
+Documents are stored in the private S3 bucket `emp-mt-system` in `ap-southeast-2` under `uploads/`. Configure `AWS_REGION`, `DOCUMENTS_S3_BUCKET`, `DOCUMENTS_S3_PREFIX`, and `DOCUMENT_DOWNLOAD_URL_TTL_SECONDS` as needed. AWS SDK v3 uses its standard credential provider chain: use environment credentials locally or an IAM role in AWS. Never commit AWS credentials. Keep S3 Block Public Access enabled and grant the application only the required bucket/object permissions.
 
-Uploads accept PDF, PNG, and JPEG files up to `MAX_DOCUMENT_SIZE_BYTES` (default 5 MiB). Extension, MIME type, and the file signature are checked. Multer writes a generated filename, while PostgreSQL stores the employee association, original name, content type, size, uploader, and soft-delete timestamp. The object key is never returned by API responses.
+Uploads accept PDF, PNG, and JPEG files up to `MAX_DOCUMENT_SIZE_BYTES` (default 5 MiB). Extension, declared MIME type, and actual file signature are checked before the API writes to S3. Object keys are generated server-side. PostgreSQL stores the employee association, original name, content type, size, uploader, and soft-delete timestamp; object keys are never returned by API responses.
 
-The authenticated download-URL endpoint returns an HMAC-signed API URL that expires after five minutes. Only an authenticated user with resource access may request one. Deletion is soft: the metadata is marked deleted and the file remains inaccessible through the API until `UPLOAD_RETENTION_DAYS` (default 30) expires. Startup cleanup removes expired soft-deleted files and unreferenced files older than 24 hours. A database transaction failure removes the just-uploaded file immediately.
+The authenticated download-URL endpoint returns a private S3 presigned URL that expires after `DOCUMENT_DOWNLOAD_URL_TTL_SECONDS` (default 300 seconds, maximum 900). Document permissions and employee ownership are both checked before issuing URLs. Deletion is soft: metadata is immediately hidden and the object remains in S3 for `UPLOAD_RETENTION_DAYS` (default 30), after which startup cleanup permanently removes it. Startup cleanup also removes unreferenced S3 objects older than 24 hours. If metadata/audit creation fails after upload, the API attempts to delete the object; orphan cleanup is the fallback.
 
-Local storage is suitable for a single-host assignment/development deployment. For multiple API instances, use a shared private filesystem; this implementation intentionally does not connect to cloud/object storage.
+The upload endpoint accepts `multipart/form-data` with the `file` field. Multer holds one size-limited file in memory; extension, MIME type, and file signature are validated before the API writes bytes to S3. Successful uploads return safe metadata and a short-lived presigned download URL. Object keys use `uploads/{employeeId}/{timestamp}_{uuid}.{validatedExtension}` and never contain the original filename.
 
 ## Failure Classification
 
@@ -22,6 +22,6 @@ Graceful shutdown stops accepting new HTTP connections, allows up to 10 seconds 
 
 ## Recovery And Tests
 
-If metadata creation fails after a file is written, the file is removed. If the process exits before cleanup, the startup cleanup removes unreferenced local files after 24 hours. Soft-deleted files are retained for the configured retention period. Monitor disk space and back up the upload directory and database together; restoring only one side can leave missing document bytes or orphaned metadata.
+If metadata creation fails after an S3 object is written, the object is removed on a best-effort basis. If the process exits before cleanup, startup reconciliation removes unreferenced objects after 24 hours. Soft-deleted objects are retained for the configured retention period. Back up database metadata and S3 objects consistently; restoring only one side can leave missing bytes or orphaned metadata.
 
 Run `npm run build` and `npm test -- --runInBand` from this package. The Postman collection includes list, auth, upload, invalid upload, download, and delete assertions. Set `documentFile` and `invalidDocumentFile` in `postman/employee-management-local.postman_environment.json` before running the collection.

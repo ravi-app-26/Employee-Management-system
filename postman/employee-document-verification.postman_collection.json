@@ -1,0 +1,168 @@
+{
+  "info": {
+    "_postman_id": "9415c50a-5748-4a8a-97af-ae772db780e8",
+    "name": "Employee Document Management - Verification Only",
+    "description": "Dedicated collection for the seven employee-document checks. Run Setup first. Uses local seeded accounts by default. Configure file variables and IDs before running. S3 privacy expiry and dependency-failure scenarios require the manual setup described in each folder.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "devPassword", "value": "DevPass#12345" },
+    { "key": "adminToken", "value": "" },
+    { "key": "employeeToken", "value": "" },
+    { "key": "employeeId", "value": "" },
+    { "key": "otherEmployeeId", "value": "" },
+    { "key": "otherDocumentId", "value": "" },
+    { "key": "documentId", "value": "" },
+    { "key": "documentFile", "value": "/absolute/path/to/valid-sample.pdf" },
+    { "key": "invalidDocumentFile", "value": "/absolute/path/to/unsupported.txt" },
+    { "key": "invalidContentFile", "value": "/absolute/path/to/not-really-a-pdf.pdf" },
+    { "key": "oversizedDocumentFile", "value": "/absolute/path/to/file-larger-than-5MiB.pdf" },
+    { "key": "downloadUrl", "value": "" },
+    { "key": "publicObjectUrl", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Setup - Login and upload sample document",
+      "description": "Run in order. This setup creates one test document in S3. Use a non-sensitive sample PDF. Seeded local password is for development only.",
+      "item": [
+        {
+          "name": "Login admin",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Admin login returns 200', function () { pm.response.to.have.status(200); });", "pm.collectionVariables.set('adminToken', pm.response.json().data.accessToken);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@example.test\",\n  \"password\": \"{{devPassword}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/v1/auth/login" }
+        },
+        {
+          "name": "Login seeded employee",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Employee login returns 200', function () { pm.response.to.have.status(200); });", "pm.collectionVariables.set('employeeToken', pm.response.json().data.accessToken);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"employee@example.test\",\n  \"password\": \"{{devPassword}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/v1/auth/login" }
+        },
+        {
+          "name": "Read employee ID",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Employee profile returns employee ID', function () { pm.response.to.have.status(200); pm.expect(pm.response.json().data.employeeId).to.be.a('string'); });", "pm.collectionVariables.set('employeeId', pm.response.json().data.employeeId);"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }], "url": "{{baseUrl}}/api/v1/auth/me" }
+        },
+        {
+          "name": "Upload valid sample PDF",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Upload returns 201', function () { pm.response.to.have.status(201); });", "const data = pm.response.json().data;", "pm.test('Response includes safe metadata and download URL', function () { pm.expect(data.id).to.be.a('string'); pm.expect(data.downloadUrl).to.be.a('string'); pm.expect(data.expiresInSeconds).to.be.above(0); pm.expect(data).not.to.have.property('objectKey'); });", "pm.collectionVariables.set('documentId', data.id);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": "{{documentFile}}" }] }, "url": "{{baseUrl}}/api/v1/employees/{{employeeId}}/documents" }
+        }
+      ]
+    },
+    {
+      "name": "1 - Download URL test",
+      "description": "Generates an authorised URL. The test checks that it is HTTPS and has a short positive expiry. To verify expiration, resend the saved URL after expiresInSeconds; S3 should reject it.",
+      "item": [
+        {
+          "name": "Generate authorised download URL",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Download URL endpoint returns 200', function () { pm.response.to.have.status(200); });", "const data = pm.response.json().data;", "pm.test('URL is short-lived HTTPS URL', function () { pm.expect(data.downloadUrl).to.match(/^https:\/\//); pm.expect(data.expiresInSeconds).to.be.above(0); pm.expect(data.expiresInSeconds).to.be.at.most(900); });", "pm.collectionVariables.set('downloadUrl', data.downloadUrl);"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/documents/{{documentId}}/download-url" }
+        },
+        {
+          "name": "Fetch file using signed URL",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Signed URL downloads the object before expiry', function () { pm.response.to.have.status(200); });"] } }],
+          "request": { "method": "GET", "url": "{{downloadUrl}}" }
+        }
+      ]
+    },
+    {
+      "name": "2 - List documents",
+      "item": [
+        {
+          "name": "List employee documents",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Document list returns 200', function () { pm.response.to.have.status(200); });", "const documents = pm.response.json().data;", "pm.test('List contains uploaded document metadata without object keys', function () { pm.expect(documents).to.be.an('array'); pm.expect(documents.some((item) => item.id === pm.collectionVariables.get('documentId'))).to.eql(true); pm.expect(documents.every((item) => !Object.prototype.hasOwnProperty.call(item, 'objectKey'))).to.eql(true); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/employees/{{employeeId}}/documents" }
+        }
+      ]
+    },
+    {
+      "name": "3 - Invalid file rejection",
+      "description": "Set file paths in collection variables first. Test unsupported extension, invalid signature with an otherwise allowed PDF name/MIME, and file larger than MAX_DOCUMENT_SIZE_BYTES.",
+      "item": [
+        {
+          "name": "Reject unsupported extension",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Unsupported extension rejected with 400', function () { pm.response.to.have.status(400); });"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": "{{invalidDocumentFile}}" }] }, "url": "{{baseUrl}}/api/v1/employees/{{employeeId}}/documents" }
+        },
+        {
+          "name": "Reject invalid PDF signature",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Invalid content signature rejected with 400', function () { pm.response.to.have.status(400); });"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": "{{invalidContentFile}}" }] }, "url": "{{baseUrl}}/api/v1/employees/{{employeeId}}/documents" }
+        },
+        {
+          "name": "Reject oversized file",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Oversized file rejected with 413', function () { pm.response.to.have.status(413); });"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": "{{oversizedDocumentFile}}" }] }, "url": "{{baseUrl}}/api/v1/employees/{{employeeId}}/documents" }
+        }
+      ]
+    },
+    {
+      "name": "4 - Authentication and ownership",
+      "description": "Set otherEmployeeId to a real employee UUID that is not the seeded employee, and otherDocumentId to an active document owned by that employee. Out-of-scope access may intentionally return 404 to avoid disclosing records.",
+      "item": [
+        {
+          "name": "Reject request without token",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Missing token returns 401', function () { pm.response.to.have.status(401); });"] } }],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/employees/{{employeeId}}/documents" }
+        },
+        {
+          "name": "Reject employee token for another employee documents",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Out-of-scope employee access is denied', function () { pm.expect([403, 404]).to.include(pm.response.code); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }], "url": "{{baseUrl}}/api/v1/employees/{{otherEmployeeId}}/documents" }
+        },
+        {
+          "name": "Reject employee token for another employee document download",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Cross-employee document download is denied', function () { pm.expect([403, 404]).to.include(pm.response.code); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }], "url": "{{baseUrl}}/api/v1/documents/{{otherDocumentId}}/download-url" }
+        }
+      ]
+    },
+    {
+      "name": "5 - Delete and retention",
+      "description": "Delete is a soft delete. Verify metadata is hidden immediately; S3 bytes are expected to remain until UPLOAD_RETENTION_DAYS and startup cleanup removes them.",
+      "item": [
+        {
+          "name": "Soft-delete document",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Delete returns 204', function () { pm.response.to.have.status(204); });"] } }],
+          "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/documents/{{documentId}}" }
+        },
+        {
+          "name": "Confirm deleted document no longer has a download URL",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Soft-deleted document returns 404 for download URL', function () { pm.response.to.have.status(404); });"] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/api/v1/documents/{{documentId}}/download-url" }
+        }
+      ]
+    },
+    {
+      "name": "6 - S3 privacy",
+      "description": "Signed URL should work only until expiresInSeconds. To check bucket privacy independently, set publicObjectUrl to the direct bucket/object URL copied from AWS Console; unauthenticated direct access should return 403. Do not enable public access to make this test pass.",
+      "item": [
+        {
+          "name": "Check S3 bucket blocks public object access (manual URL check)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Direct anonymous S3 object access is denied', function () { pm.response.to.have.status(403); });"] } }],
+          "request": { "method": "GET", "url": "{{publicObjectUrl}}" }
+        },
+        {
+          "name": "Check saved signed URL after expiry (run after TTL)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Expired signed URL is rejected by S3', function () { pm.expect([400, 403]).to.include(pm.response.code); });"] } }],
+          "request": { "method": "GET", "url": "{{downloadUrl}}" }
+        }
+      ]
+    },
+    {
+      "name": "7 - Storage and database failures",
+      "description": "Manual fault-injection only. For S3 failure, temporarily run with an invalid test bucket or deny PutObject in a non-production test IAM policy; expect 503. For DB failure, make S3 available but stop the test DB before upload; expect 500 and verify application logs show cleanup attempt. Restore dependencies after each check. Never run this against production.",
+      "item": [
+        {
+          "name": "Upload while test S3 is intentionally unavailable",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Unavailable S3 causes a 503 response', function () { pm.response.to.have.status(503); });"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": "{{documentFile}}" }] }, "url": "{{baseUrl}}/api/v1/employees/{{employeeId}}/documents" }
+        },
+        {
+          "name": "Upload while test database is intentionally unavailable",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Unavailable database fails safely', function () { pm.expect([500, 503]).to.include(pm.response.code); });"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": "{{documentFile}}" }] }, "url": "{{baseUrl}}/api/v1/employees/{{employeeId}}/documents" }
+        }
+      ]
+    }
+  ]
+}

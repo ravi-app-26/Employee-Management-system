@@ -1,7 +1,7 @@
 import { CookieOptions, Request, Response } from 'express';
 import { env } from '../config/env';
 import { UnauthorizedError } from '../errors/app-error';
-import { AuthService } from '../services/auth.service';
+import { AuthService } from '../services';
 import { ApiResponse } from '../utils/api-response';
 
 const REFRESH_COOKIE = 'refresh_token';

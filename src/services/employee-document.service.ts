@@ -1,13 +1,11 @@
-import { createReadStream } from 'node:fs';
-import { access, chmod, mkdir, readFile, readdir, stat, unlink } from 'node:fs/promises';
-import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { DataSource, IsNull, Repository } from 'typeorm';
-import { AuditLog } from '../entities/audit-log.entity';
-import { Employee } from '../entities/employee.entity';
-import { EmployeeDocument } from '../entities/employee-document.entity';
-import { BadRequestError, NotFoundError, UnauthorizedError } from '../errors/app-error';
+import { AuditLog, Employee, EmployeeDocument } from '../entities';
+import { BadRequestError, NotFoundError } from '../errors/app-error';
 import { env } from '../config/env';
-import { LocalDocumentStorage } from './document-storage';
+import { logger } from '../config/logger';
+import { sanitizeOriginalFilename, S3DocumentStorage, validateDocumentContent } from '../storage';
+import type { DocumentObjectStorage } from '../storage';
 
 export interface DocumentActor {
   id: string;
@@ -20,20 +18,23 @@ export class EmployeeDocumentService {
     private readonly dataSource: DataSource,
     private readonly documents: Repository<EmployeeDocument>,
     private readonly employees: Repository<Employee>,
+    private readonly storage: DocumentObjectStorage = new S3DocumentStorage(),
   ) {}
 
   async upload(employeeId: string, file: Express.Multer.File | undefined, actor: DocumentActor, requestId: string) {
     if (!file) throw new BadRequestError('Upload file is required');
+    await this.ensureEmployeeAccess(employeeId, actor, true);
+    const validatedExtension = validateDocumentContent(file.mimetype, file.buffer);
+    const originalName = sanitizeOriginalFilename(file.originalname);
+    const prefix = env.DOCUMENTS_S3_PREFIX.replace(/^\/+|\/+$/g, '') || 'uploads';
+    const key = `${prefix}/${employeeId}/${Date.now()}_${randomUUID()}.${validatedExtension}`;
     try {
-      await this.ensureEmployeeAccess(employeeId, actor, true);
-      const content = await readFile(file.path);
-      LocalDocumentStorage.validateContent(file.mimetype, content);
-      const key = path.basename(file.filename);
-
+      await this.storage.put(key, file.buffer, file.mimetype);
+      const downloadUrl = await this.storage.presignDownload(key, originalName, file.mimetype);
       return await this.dataSource.transaction(async (manager) => {
         const document = await manager.save(EmployeeDocument, manager.create(EmployeeDocument, {
           employeeId,
-          originalName: path.basename(file.originalname).slice(0, 255),
+          originalName,
           mimeType: file.mimetype,
           sizeBytes: file.size,
           objectKey: key,
@@ -46,10 +47,16 @@ export class EmployeeDocumentService {
           resourceId: document.id,
           requestId,
         }));
-        return this.publicDocument(document);
+        return {
+          ...this.publicDocument(document),
+          downloadUrl,
+          expiresInSeconds: env.DOCUMENT_DOWNLOAD_URL_TTL_SECONDS,
+        };
       });
     } catch (error) {
-      await unlink(file.path).catch(() => undefined);
+      await this.storage.delete(key).catch((cleanupError: unknown) => {
+        logger.warn({ objectKey: key, err: cleanupError }, 'Failed to clean up uploaded document object');
+      });
       throw error;
     }
   }
@@ -77,20 +84,9 @@ export class EmployeeDocumentService {
       resourceId: document.id,
       requestId,
     });
-    return { downloadUrl: LocalDocumentStorage.downloadUrl(document.id), expiresInSeconds: 300 };
-  }
-
-  async download(documentId: string, token: string | undefined) {
-    if (!token || !LocalDocumentStorage.verifyDownloadToken(documentId, token)) {
-      throw new UnauthorizedError('Download link is invalid or expired');
-    }
-    const document = await this.findActiveDocument(documentId);
-    const filePath = LocalDocumentStorage.filePath(document.objectKey);
-    await access(filePath).catch(() => { throw new NotFoundError('Document file not found'); });
     return {
-      stream: createReadStream(filePath),
-      mimeType: document.mimeType,
-      originalName: document.originalName,
+      downloadUrl: await this.storage.presignDownload(document.objectKey, document.originalName, document.mimeType),
+      expiresInSeconds: env.DOCUMENT_DOWNLOAD_URL_TTL_SECONDS,
     };
   }
 
@@ -110,10 +106,7 @@ export class EmployeeDocumentService {
     });
   }
 
-  async cleanupLocalFiles(): Promise<void> {
-    const directory = path.resolve(env.UPLOAD_DIR);
-    await mkdir(directory, { recursive: true, mode: 0o700 });
-    await chmod(directory, 0o700);
+  async cleanupStoredObjects(): Promise<void> {
     const documents = await this.documents.createQueryBuilder('document')
       .select(['document.id', 'document.objectKey', 'document.deletedAt'])
       .getMany();
@@ -122,19 +115,17 @@ export class EmployeeDocumentService {
 
     for (const document of documents) {
       if (document.deletedAt && document.deletedAt.getTime() < retentionCutoff) {
-        await unlink(LocalDocumentStorage.filePath(document.objectKey)).catch(() => undefined);
+        await this.storage.delete(document.objectKey);
         await this.documents.delete({ id: document.id });
         retainedKeys.delete(document.objectKey);
       }
     }
 
     const orphanCutoff = Date.now() - 24 * 60 * 60 * 1000;
-    for (const fileName of await readdir(directory)) {
-      if (retainedKeys.has(fileName)) continue;
-      const filePath = LocalDocumentStorage.filePath(fileName);
-      const fileInfo = await stat(filePath).catch(() => null);
-      if (fileInfo?.isFile() && fileInfo.mtimeMs < orphanCutoff) {
-        await unlink(filePath).catch(() => undefined);
+    for (const object of await this.storage.list(env.DOCUMENTS_S3_PREFIX)) {
+      if (retainedKeys.has(object.key)) continue;
+      if (object.lastModified && object.lastModified.getTime() < orphanCutoff) {
+        await this.storage.delete(object.key);
       }
     }
   }

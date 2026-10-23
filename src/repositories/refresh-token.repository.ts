@@ -1,5 +1,5 @@
 import { DataSource, IsNull, Repository } from 'typeorm';
-import { RefreshToken } from '../entities/refresh-token.entity';
+import { RefreshToken } from '../entities';
 
 export class RefreshTokenRepository {
   private readonly repo: Repository<RefreshToken>;

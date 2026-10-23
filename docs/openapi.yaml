@@ -3,7 +3,7 @@ info:
   title: Employee Management API
   version: 1.0.0
   description: >-
-    Employee management API with authenticated private local document uploads.
+    Employee management API with authenticated private S3 document storage.
 servers:
   - url: http://localhost:3000
     description: Local development server (PORT defaults to 3000)
@@ -899,10 +899,11 @@ paths:
       tags: [Documents]
       operationId: uploadEmployeeDocument
       summary: Upload a private employee document
-      description: Multipart field `file`; only matching PDF, PNG, and JPEG extension, MIME type, and file signature are accepted. Maximum size is configured by MAX_DOCUMENT_SIZE_BYTES (default 5 MiB). Admin/HR or the employee themself may upload; manager access is limited to reading direct reports.
+      description: Multipart field `file`; only matching PDF, PNG, and JPEG extension, MIME type, and file signature are accepted. Maximum size is configured by MAX_DOCUMENT_SIZE_BYTES (default 5 MiB). Files are validated by the API and stored privately in S3.
       security:
         - bearerAuth: []
       x-access-policy: admin, HR, or employee owner
+      x-required-permission: document:upload
       parameters:
         - name: id
           in: path
@@ -921,11 +922,11 @@ paths:
                   format: binary
       responses:
         '201':
-          description: Document metadata created
+          description: Document uploaded to private S3 with a short-lived download URL
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DocumentEnvelope'
+                $ref: '#/components/schemas/DocumentUploadEnvelope'
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
@@ -941,6 +942,7 @@ paths:
       security:
         - bearerAuth: []
       x-access-policy: admin, HR, employee owner, or direct manager
+      x-required-permission: document:read
       parameters:
         - name: id
           in: path
@@ -966,11 +968,12 @@ paths:
     get:
       tags: [Documents]
       operationId: createDocumentDownloadUrl
-      summary: Create a five-minute authorized download URL
+      summary: Create an authorized short-lived S3 download URL
       description: Admin/HR, the employee themself, or the employee's direct manager may issue a short-lived URL.
       security:
         - bearerAuth: []
       x-access-policy: admin, HR, employee owner, or direct manager
+      x-required-permission: document:read
       parameters:
         - name: id
           in: path
@@ -978,7 +981,7 @@ paths:
           schema: { type: string, format: uuid }
       responses:
         '200':
-          description: Short-lived signed API URL
+          description: Short-lived private S3 presigned URL
           content:
             application/json:
               schema:
@@ -990,36 +993,10 @@ paths:
                     required: [downloadUrl, expiresInSeconds]
                     properties:
                       downloadUrl: { type: string, format: uri }
-                      expiresInSeconds: { type: integer, const: 300 }
+                      expiresInSeconds: { type: integer, maximum: 900 }
                   requestId: { type: string }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
-        '404': { $ref: '#/components/responses/NotFoundError' }
-        '503': { $ref: '#/components/responses/ServerError' }
-
-  /api/v1/documents/{id}/download:
-    get:
-      tags: [Documents]
-      operationId: downloadDocument
-      summary: Download a document using its short-lived signed URL
-      security: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-        - name: token
-          in: query
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: Private file stream
-          content:
-            application/pdf: { schema: { type: string, format: binary } }
-            image/png: { schema: { type: string, format: binary } }
-            image/jpeg: { schema: { type: string, format: binary } }
-        '401': { $ref: '#/components/responses/UnauthorizedError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
         '503': { $ref: '#/components/responses/ServerError' }
 
@@ -1028,10 +1005,11 @@ paths:
       tags: [Documents]
       operationId: deleteDocument
       summary: Soft-delete an employee document
-      description: Access is limited to admin/HR and the document owner. The file is retained locally for UPLOAD_RETENTION_DAYS (default 30) before cleanup.
+      description: Access is limited to admin/HR and the document owner. The object remains private in S3 and is permanently removed after UPLOAD_RETENTION_DAYS (default 30).
       security:
         - bearerAuth: []
       x-access-policy: admin, HR, or employee owner
+      x-required-permission: document:delete
       parameters:
         - name: id
           in: path
@@ -1215,6 +1193,20 @@ components:
       properties:
         success: { type: boolean, const: true }
         data: { $ref: '#/components/schemas/EmployeeDocument' }
+        requestId: { type: string }
+    DocumentUploadEnvelope:
+      type: object
+      required: [success, data, requestId]
+      properties:
+        success: { type: boolean, const: true }
+        data:
+          allOf:
+            - $ref: '#/components/schemas/EmployeeDocument'
+            - type: object
+              required: [downloadUrl, expiresInSeconds]
+              properties:
+                downloadUrl: { type: string, format: uri }
+                expiresInSeconds: { type: integer, maximum: 900 }
         requestId: { type: string }
     SuccessEnvelope:
       type: object

@@ -330,11 +330,11 @@
       ]
     },
     {
-      "name": "06 - Employee Documents (Local Multer Storage)",
+      "name": "06 - Employee Documents (Private S3)",
       "item": [
         {
           "name": "POST - upload employee PDF document",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Document upload returns 201', function () { pm.response.to.have.status(201); });", "const body = pm.response.json();", "pm.test('Response contains safe document metadata', function () { pm.expect(body.data).to.have.property('id'); pm.expect(body.data).not.to.have.property('objectKey'); });", "pm.collectionVariables.set('documentId', body.data.id);"] } }],
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Document upload returns 201', function () { pm.response.to.have.status(201); });", "const body = pm.response.json();", "pm.test('Response contains safe metadata and a short-lived download URL', function () { pm.expect(body.data).to.have.property('id'); pm.expect(body.data).to.have.property('downloadUrl'); pm.expect(body.data.expiresInSeconds).to.be.a('number'); pm.expect(body.data).not.to.have.property('objectKey'); });", "pm.collectionVariables.set('documentId', body.data.id);"] } }],
           "request": {
             "method": "POST",
             "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],

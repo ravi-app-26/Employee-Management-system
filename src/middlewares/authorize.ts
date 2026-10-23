@@ -1,6 +1,6 @@
 import { RequestHandler } from 'express';
 import { ForbiddenError, UnauthorizedError } from '../errors/app-error';
-import { AuthorizationService } from '../services/authorization.service';
+import { AuthorizationService } from '../services';
 
 export class AuthorizationMiddleware {
   static requireRole(...roles: string[]): RequestHandler {

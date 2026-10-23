@@ -1,4 +1,8 @@
+<<<<<<< Updated upstream
 import { Department } from '../entities/department.entity';
+=======
+import { Department } from '../entities';
+>>>>>>> Stashed changes
 
 export interface DepartmentDto {
   id: string;
