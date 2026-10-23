@@ -37,11 +37,8 @@
 | Privacy principle / task | Current implementation evidence | Gap / organizational action |
 |---|---|---|
 | Data minimization and purpose limitation | Current schema collects work identity, job/department/reporting data, optional phone, auth metadata, and uploaded documents. | Document and approve purpose/lawful basis for each field and each role's access. This repository cannot decide the lawful basis. |
-<<<<<<< Updated upstream
 | Access control and confidentiality | RBAC, resource scope, DTO responses, password hashes excluded, private local files. | Conduct deployment security review, least-privilege review, penetration testing, and operational access review. |
-=======
-| Access control and confidentiality | RBAC, employee ownership scope, DTO responses, password hashes excluded, private S3 objects, short-lived presigned downloads. | Conduct deployment security review, least-privilege IAM review, penetration testing, and operational access review. |
->>>>>>> Stashed changes
+
 | Logging minimization | Pino redacts common credential keys; application error responses omit stack traces. | Avoid logging full employee/document contents; define log access and deletion periods outside this code. |
 | Retention limitation | Document file retention is configurable; employee deactivation and token revocation exist. | Employee, user, audit, and expired refresh-token database retention is not scheduled. Organization must define legal/operational retention and implement approved jobs. |
 | Accuracy and correction | Employee/profile patch operations allow selected corrections. | Define verification, history, and correction process; audit semantics do not capture before/after values. |

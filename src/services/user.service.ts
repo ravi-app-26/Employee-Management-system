@@ -1,13 +1,10 @@
 import { DataSource, IsNull } from 'typeorm';
-<<<<<<< Updated upstream
 import { AuditLog } from '../entities/audit-log.entity';
 import { Employee } from '../entities/employee.entity';
 import { RefreshToken } from '../entities/refresh-token.entity';
 import { Role } from '../entities/role.entity';
 import { User } from '../entities/user.entity';
-=======
-import { AuditLog, Employee, RefreshToken, Role, User } from '../entities';
->>>>>>> Stashed changes
+
 import { toEmployeeDto } from '../dto/employee.dto';
 import { NotFoundError } from '../errors/app-error';
 import { writeAuditLog } from '../utils/write-audit-log';

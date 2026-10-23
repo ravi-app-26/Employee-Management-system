@@ -1,13 +1,7 @@
 import { DataSource, Repository } from 'typeorm';
-<<<<<<< Updated upstream
 import { Department } from '../entities/department.entity';
-<<<<<<< Updated upstream
 import { DEPARTMENT_SORT_FIELDS } from '../validators/department.validator';
-=======
-=======
-import { Department } from '../entities';
-import { DEPARTMENT_SORT_FIELDS } from '../validators';
->>>>>>> Stashed changes
+
 
 type DepartmentSortField = (typeof DEPARTMENT_SORT_FIELDS)[number];
 
@@ -15,10 +9,6 @@ const DEPARTMENT_SORT_COLUMNS: Record<DepartmentSortField, keyof Department> = {
   name: 'name',
   createdAt: 'createdAt',
 };
-<<<<<<< Updated upstream
-=======
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 
 export class DepartmentRepository {
   private readonly repo: Repository<Department>;

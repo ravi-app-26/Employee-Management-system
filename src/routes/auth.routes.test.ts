@@ -12,18 +12,13 @@ import cookieParser from 'cookie-parser';
 import express, { RequestHandler } from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-<<<<<<< Updated upstream
 
-=======
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
+
 import { AuthController } from '../controllers/auth.controller';
 import { ErrorHandlerMiddleware } from '../middlewares/error-handler';
-=======
 
 import { AuthController } from '../controllers';
 import { ErrorHandlerMiddleware } from '../middlewares';
->>>>>>> Stashed changes
 import { UnauthorizedError } from '../errors/app-error';
 import { AuthService, AuthorizationService } from '../services';
 import { AuthRoutes } from './auth.routes';
@@ -148,12 +143,9 @@ describe("login service",()=>{
       data: { accessToken: tokens.accessToken },
       requestId: 'login-test-request',
     });
-<<<<<<< Updated upstream
   })
 })
-=======
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
+
 
 // // Handle errors returned by routes and middleware.
 // app.use(ErrorHandlerMiddleware.handle);
@@ -278,7 +270,6 @@ describe("login service",()=>{
 //           newPassword: 'new-password-123',
 //         });
 
-<<<<<<< Updated upstream
 //       expect(response.status).toBe(204);
 //       expect(response.headers['set-cookie'][0]).toContain('refresh_token=;');
 //       expect(service.changePassword).toHaveBeenCalledWith(
@@ -303,15 +294,4 @@ describe("login service",()=>{
 //     });
 //   });
 // });
-=======
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('VALIDATION_ERROR');
-      expect(service.changePassword).not.toHaveBeenCalled();
-    });
-  });
-});
-=======
-  })
-})
->>>>>>> Stashed changes
->>>>>>> Stashed changes
+

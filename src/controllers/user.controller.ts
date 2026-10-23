@@ -1,13 +1,8 @@
 import { Request, Response } from 'express';
-<<<<<<< Updated upstream
 import { UserService } from '../services/user.service';
 import { ApiResponse } from '../utils/api-response';
 import { assignRoleSchema } from '../validators/user.validator';
-=======
-import { UserService } from '../services';
-import { ApiResponse } from '../utils/api-response';
-import { assignRoleSchema } from '../validators';
->>>>>>> Stashed changes
+
 
 export class UserController {
   constructor(private readonly service: UserService) {}
