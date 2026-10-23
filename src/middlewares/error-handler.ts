@@ -1,11 +1,15 @@
-import { ErrorRequestHandler } from 'express';
+import { ErrorRequestHandler, RequestHandler } from 'express';
 import { ZodError } from 'zod';
-import { AppError } from '../errors/app-error';
-import { MulterError } from '../services/document-storage';
+import { AppError, NotFoundError } from '../errors/app-error';
+import { MulterError } from '../storage';
 import { env } from '../config/env';
 import { logger } from '../config/logger';
 
 export class ErrorHandlerMiddleware {
+  static notFound: RequestHandler = (req, _res, next) => {
+    next(new NotFoundError(`Route ${req.method} ${req.path} not found`));
+  };
+
   static handle: ErrorRequestHandler = (err, req, res, _next) => {
     let status = 500;
     let code = 'INTERNAL_ERROR';

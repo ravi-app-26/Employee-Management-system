@@ -1,6 +1,10 @@
 # Employee Management API
 
+<<<<<<< Updated upstream
 Secure REST API built with Express 5, TypeScript, PostgreSQL, and TypeORM. The current implementation includes authentication and refresh-token sessions, RBAC, employee and department management, private local employee-document storage, request validation, audit records, and OpenAPI/Swagger documentation.
+=======
+Secure REST API built with Express 5, TypeScript, PostgreSQL, and TypeORM. The current implementation includes authentication and refresh-token sessions, RBAC, employee and department management, private S3 employee-document storage, request validation, audit records, and OpenAPI/Swagger documentation.
+>>>>>>> Stashed changes
 
 ## Prerequisites
 
@@ -58,10 +62,19 @@ For a production build, run `npm run build` followed by `npm start`. The server 
 | `BCRYPT_ROUNDS` | `12` | bcrypt work factor. |
 | `RATE_LIMIT_WINDOW_MS` | `60000` | General request-rate window. |
 | `RATE_LIMIT_MAX_REQUESTS` | `30` | General requests per window. Login, refresh, and password-change routes use a separate limit of 8 per minute. |
+<<<<<<< Updated upstream
 | `UPLOAD_DIR` | `private-uploads` | Local private document directory; do not expose it as static content. |
 | `MAX_DOCUMENT_SIZE_BYTES` | `5242880` | Upload size limit; config caps it at 10 MiB. |
 | `UPLOAD_RETENTION_DAYS` | `30` | Days soft-deleted document files remain before cleanup. |
 | `PUBLIC_API_BASE_URL` | `http://localhost:3000` | Base URL embedded in signed download URLs. |
+=======
+| `MAX_DOCUMENT_SIZE_BYTES` | `5242880` | Upload size limit; config caps it at 10 MiB. |
+| `UPLOAD_RETENTION_DAYS` | `30` | Days soft-deleted document objects remain before cleanup. |
+| `AWS_REGION` | `ap-southeast-2` | AWS SDK region; uses the standard AWS credential provider chain. |
+| `DOCUMENTS_S3_BUCKET` | `emp-mt-system` | Private S3 bucket for employee documents. |
+| `DOCUMENTS_S3_PREFIX` | `uploads/` | Prefix for server-generated document keys. |
+| `DOCUMENT_DOWNLOAD_URL_TTL_SECONDS` | `300` | Presigned download URL expiry; maximum 900 seconds. |
+>>>>>>> Stashed changes
 | `DB_CONNECT_TIMEOUT_MS` | `5000` | PostgreSQL connection timeout. |
 | `DB_QUERY_TIMEOUT_MS` | `10000` | PostgreSQL query timeout. |
 | `DB_STATEMENT_TIMEOUT_MS` | `10000` | Statement and idle-in-transaction timeout. |
@@ -100,6 +113,12 @@ The matrix below is the seed mapping in [`seeds/run.ts`](seeds/run.ts). Resource
 | `profile:read_own` | Yes | Yes | Yes | Yes |
 | `profile:update_own` | Yes | Yes | Yes | Yes |
 | `profile:export_own` | Yes | Yes | Yes | Yes |
+<<<<<<< Updated upstream
+=======
+| `document:upload` | Yes | Yes | No | Own documents |
+| `document:read` | Yes | Yes | Direct reports | Own documents |
+| `document:delete` | Yes | Yes | No | Own documents |
+>>>>>>> Stashed changes
 
 Managers may read and update themselves/direct reports where route and service rules allow; they cannot update their own employment record through `/:id`. Employees may use only `/employees/me` for their profile. Out-of-scope detail lookups are intentionally returned as not found. `audit:read` is seeded but no audit-reading API route is currently mounted.
 
@@ -113,7 +132,11 @@ PostgreSQL migrations are the schema source of truth; TypeORM synchronization is
 - `roles`, `permissions`, `role_permissions`: RBAC definitions and join table.
 - `refresh_tokens`: SHA-256 token hash, session family, expiry, revocation time.
 - `audit_logs`: actor, action, resource type/ID, timestamp, request ID.
+<<<<<<< Updated upstream
 - `employee_documents`: safe metadata and private local object key; file bytes live under `UPLOAD_DIR`, not in PostgreSQL.
+=======
+- `employee_documents`: safe metadata and private S3 object key; file bytes live in the private configured S3 bucket, not in PostgreSQL.
+>>>>>>> Stashed changes
 
 Constraints include UUID primary keys, unique case-insensitive user/employee work-email indexes, unique employee-to-user association, foreign keys, employment-status check, and a self-manager check. Migrations add department/status, sorting, and trigram search indexes.
 
@@ -127,5 +150,9 @@ Constraints include UUID primary keys, unique case-insensitive user/employee wor
 - Login returns a short-lived JWT access token and sets an HttpOnly refresh cookie. The cookie is `SameSite=Strict`, scoped to `/api/v1/auth`, and `Secure` in production.
 - Refresh-token values are not stored in the database; only hashes are stored. Rotation is transactional, and reuse revokes the token family.
 - Employee update input is strict/allowlisted. Self-profile writes allow only first name, last name, and phone.
+<<<<<<< Updated upstream
 - Documents are stored on local disk with generated names and private permissions. This is not cloud object storage and is intended for a single host unless the deployment provides a shared private filesystem.
+=======
+- Documents are validated by the API and stored in private S3 under server-generated keys. Keep Block Public Access enabled; configure a least-privilege IAM role/policy for the application. Downloads use short-lived presigned S3 URLs after role and employee-ownership checks.
+>>>>>>> Stashed changes
 - GDPR obligations depend on the deploying organization. The implementation does not define a lawful basis, notices, a complete data-subject-rights process, or employee/audit retention schedule. See [`docs/security-and-privacy-report.md`](docs/security-and-privacy-report.md) and [`docs/data-inventory.md`](docs/data-inventory.md).

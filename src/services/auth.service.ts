@@ -3,8 +3,7 @@ import jwt from 'jsonwebtoken';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import { env } from '../config/env';
 import { BadRequestError, NotFoundError, UnauthorizedError } from '../errors/app-error';
-import { UserRepository } from '../repositories/user.repository';
-import { RefreshTokenRepository } from '../repositories/refresh-token.repository';
+import { RefreshTokenRepository, UserRepository } from '../repositories';
 
 export interface TokenPair {
   accessToken: string;

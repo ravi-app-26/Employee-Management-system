@@ -12,8 +12,19 @@ export class ApplicationServer {
 
   async start(): Promise<void> {
     await this.initializeDatabase();
+<<<<<<< Updated upstream
     await employeeDocumentService.cleanupLocalFiles();
+<<<<<<< Updated upstream
     logger.info('Database connected (TypeORM)');
+=======
+    console.log('Database connected (TypeORM)');
+=======
+    await employeeDocumentService.cleanupStoredObjects().catch((error: unknown) => {
+      logger.warn({ err: error }, 'Document storage cleanup failed during startup');
+    });
+    logger.info('Database connected (TypeORM)');
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 
     this.server = app.listen(env.PORT, () => {
       logger.info({ port: env.PORT, environment: env.NODE_ENV }, 'Server listening');

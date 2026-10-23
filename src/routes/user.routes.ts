@@ -1,9 +1,16 @@
 import { RequestHandler, Router } from 'express';
+<<<<<<< Updated upstream
 import { UserController } from '../controllers/user.controller';
 import { AuthorizationMiddleware } from '../middlewares/authorize';
 import { RequestValidationMiddleware } from '../middlewares/validate-request';
 import { AuthorizationService } from '../services/authorization.service';
 import { assignRoleSchema } from '../validators/user.validator';
+=======
+import { UserController } from '../controllers';
+import { AuthorizationMiddleware, RequestValidationMiddleware } from '../middlewares';
+import { AuthorizationService } from '../services';
+import { assignRoleSchema } from '../validators';
+>>>>>>> Stashed changes
 
 export class UserRoutes {
   static create(

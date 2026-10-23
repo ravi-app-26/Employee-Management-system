@@ -1,14 +1,27 @@
 import { Router, RequestHandler } from 'express';
+<<<<<<< Updated upstream
 import { AuthController } from '../controllers/auth.controller';
 import { RequestValidationMiddleware } from '../middlewares/validate-request';
 import { AuthorizationMiddleware } from '../middlewares/authorize';
 import { AuthorizationService } from '../services/authorization.service';
+<<<<<<< Updated upstream
 import { RateLimitMiddleware } from '../middlewares/rate-limiter';
+=======
+=======
+import { AuthController } from '../controllers';
+import {
+  AuthorizationMiddleware,
+  RateLimitMiddleware,
+  RequestValidationMiddleware,
+} from '../middlewares';
+import { AuthorizationService } from '../services';
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 import {
   changePasswordSchema,
   loginSchema,
   registerSchema,
-} from '../validators/auth.validator';
+} from '../validators';
 export class AuthRoutes {
   static create(
     ctrl: AuthController,

@@ -1,12 +1,11 @@
 import { RequestHandler, Router } from 'express';
-import { DepartmentController } from '../controllers/department.controller';
-import { AuthorizationMiddleware } from '../middlewares/authorize';
-import { RequestValidationMiddleware } from '../middlewares/validate-request';
-import { AuthorizationService } from '../services/authorization.service';
+import { DepartmentController } from '../controllers';
+import { AuthorizationMiddleware, RequestValidationMiddleware } from '../middlewares';
+import { AuthorizationService } from '../services';
 import {
   createDepartmentSchema,
   updateDepartmentSchema,
-} from '../validators/department.validator';
+} from '../validators';
 
 export class DepartmentRoutes {
   static create(

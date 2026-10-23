@@ -1,7 +1,6 @@
 import { Repository } from 'typeorm';
-import { Employee } from '../entities/employee.entity';
-import { User } from '../entities/user.entity';
-import { EMPLOYEE_SORT_FIELDS } from '../validators/employee.validator';
+import { Employee, User } from '../entities';
+import { EMPLOYEE_SORT_FIELDS } from '../validators';
 
 type SortField = (typeof EMPLOYEE_SORT_FIELDS)[number];
 

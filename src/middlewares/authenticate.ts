@@ -1,6 +1,6 @@
 import { RequestHandler } from 'express';
 import { UnauthorizedError } from '../errors/app-error';
-import { AuthService } from '../services/auth.service';
+import { AuthService } from '../services';
 
 export class AuthenticationMiddleware {
   static create(authService: AuthService): RequestHandler {

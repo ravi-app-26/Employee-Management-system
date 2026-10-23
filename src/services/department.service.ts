@@ -1,10 +1,22 @@
 import { NotFoundError } from '../errors/app-error';
+<<<<<<< Updated upstream
 import { Department } from '../entities/department.entity';
 import { DepartmentRepository } from '../repositories/department.repository';
+<<<<<<< Updated upstream
 import { DepartmentDto, toDepartmentDto } from '../dto/department.dto';
 import { DEPARTMENT_SORT_FIELDS } from '../validators/department.validator';
 
 type DepartmentSortField = (typeof DEPARTMENT_SORT_FIELDS)[number];
+=======
+=======
+import { Department } from '../entities';
+import { DepartmentRepository } from '../repositories';
+import { DepartmentDto, toDepartmentDto } from '../dto/department.dto';
+import { DEPARTMENT_SORT_FIELDS } from '../validators';
+
+type DepartmentSortField = (typeof DEPARTMENT_SORT_FIELDS)[number];
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 
 export class DepartmentService {
   constructor(private readonly repo: DepartmentRepository) {}

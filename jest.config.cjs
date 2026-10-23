@@ -1,9 +1,21 @@
 module.exports = {
   testEnvironment: 'node',
+<<<<<<< Updated upstream
   testMatch: [
     '<rootDir>/src/routes/auth.routes.test.ts',
     '<rootDir>/src/config/logger.test.ts',
   ],
+=======
+<<<<<<< Updated upstream
+  testMatch: ['<rootDir>/src/routes/auth.routes.test.ts'],
+=======
+  testMatch: [
+    '<rootDir>/src/routes/auth.routes.test.ts',
+    '<rootDir>/src/config/logger.test.ts',
+    '<rootDir>/src/services/employee-document.service.test.ts',
+  ],
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
   testPathIgnorePatterns: ['/node_modules/', '/dist/'],
   transform: {
     '^.+\\.tsx?$': [

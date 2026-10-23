@@ -1,8 +1,7 @@
 import { RequestHandler, Router } from 'express';
-import { EmployeeController } from '../controllers/employee.controller';
-import { AuthorizationMiddleware } from '../middlewares/authorize';
-import { RequestValidationMiddleware } from '../middlewares/validate-request';
-import { AuthorizationService } from '../services/authorization.service';
+import { EmployeeController } from '../controllers';
+import { AuthorizationMiddleware, RequestValidationMiddleware } from '../middlewares';
+import { AuthorizationService } from '../services';
 
 export class EmployeeRoutes {
   static create(

@@ -1,14 +1,19 @@
 import { AppDataSource } from './config/database';
-import { UserRepository } from './repositories/user.repository';
-import { RefreshTokenRepository } from './repositories/refresh-token.repository';
-import { AuthService } from './services/auth.service';
-import { AuthorizationService } from './services/authorization.service';
-import { AuthController } from './controllers/auth.controller';
-import { AuthenticationMiddleware } from './middlewares/authenticate';
-import { DepartmentRepository } from './repositories/department.repository';
-import { DepartmentService } from './services/department.service';
-import { DepartmentController } from './controllers/department.controller';
+import { RefreshTokenRepository, UserRepository } from './repositories';
+import {
+	AuthService,
+	AuthorizationService,
+	DepartmentService,
+	EmployeeDocumentService,
+	EmployeeService,
+	UserService,
+} from './services';
+import { AuthController } from './controllers';
+import { AuthenticationMiddleware } from './middlewares';
+import { DepartmentRepository } from './repositories';
+import { DepartmentController } from './controllers';
 // ...existing code...
+<<<<<<< Updated upstream
 import { Employee } from './entities/employee.entity';
 import { Department } from './entities/department.entity';
 import { User } from './entities/user.entity';
@@ -17,8 +22,17 @@ import { EmployeeController } from './controllers/employee.controller';
 import { EmployeeDocumentController } from './controllers/employee-document.controller';
 import { EmployeeDocument } from './entities/employee-document.entity';
 import { EmployeeDocumentService } from './services/employee-document.service';
+<<<<<<< Updated upstream
 import { UserService } from './services/user.service';
 import { UserController } from './controllers/user.controller';
+=======
+=======
+import { Department, Employee, User } from './entities';
+import { EmployeeController, EmployeeDocumentController } from './controllers';
+import { EmployeeDocument } from './entities';
+import { UserController } from './controllers';
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 // ...existing code...
 const userRepository = new UserRepository(AppDataSource);
 const refreshTokenRepository = new RefreshTokenRepository(AppDataSource);

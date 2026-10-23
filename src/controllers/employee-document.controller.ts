@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import { EmployeeDocumentService } from '../services/employee-document.service';
+import { EmployeeDocumentService } from '../services';
 import { ApiResponse } from '../utils/api-response';
 
 export class EmployeeDocumentController {
@@ -11,10 +11,9 @@ export class EmployeeDocumentController {
   constructor(private readonly service: EmployeeDocumentService) {}
 
   upload = async (req: Request, res: Response) => {
-    ApiResponse.created(
-      res,
-      await this.service.upload(String(req.params.id), req.file, req.user!, req.id),
-    );
+    ApiResponse.created(res, await this.service.upload(
+      String(req.params.id), req.file, req.user!, req.id,
+    ));
   };
 
   list = async (req: Request, res: Response) => {
@@ -23,16 +22,6 @@ export class EmployeeDocumentController {
 
   downloadUrl = async (req: Request, res: Response) => {
     ApiResponse.ok(res, await this.service.createDownloadUrl(String(req.params.id), req.user!, req.id));
-  };
-
-  download = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const result = await this.service.download(String(req.params.id), String(req.query.token ?? ''));
-      res.type(result.mimeType).attachment(result.originalName);
-      result.stream.on('error', next).pipe(res);
-    } catch (error) {
-      next(error);
-    }
   };
 
   remove = async (req: Request, res: Response) => {
