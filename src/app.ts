@@ -38,7 +38,7 @@ app.get('/health', HealthController.handle);
 app.get('/health/live', HealthController.live);
 app.get('/health/ready', HealthController.ready);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-app.use(
+app.use(  
   '/api/v1/auth',
   AuthRoutes.create(authController, authenticateMiddleware, authorizationService),
 );

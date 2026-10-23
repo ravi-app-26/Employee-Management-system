@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { S3Client } from '@aws-sdk/client-s3';
 import { env } from '../config/env';
@@ -13,6 +13,7 @@ export interface StoredObject {
 
 export interface DocumentObjectStorage {
   put(key: string, body: Buffer, contentType: string): Promise<void>;
+  exists(key: string): Promise<boolean>;
   presignDownload(key: string, filename: string, contentType: string): Promise<string>;
   delete(key: string): Promise<void>;
   list(prefix: string): Promise<StoredObject[]>;
@@ -31,6 +32,22 @@ export class S3DocumentStorage implements DocumentObjectStorage {
         ServerSideEncryption: 'AES256',
       }));
     } catch {
+      throw new ServiceUnavailableError('Document storage is temporarily unavailable');
+    }
+  }
+
+  async exists(key: string): Promise<boolean> {
+    try {
+      await this.client.send(new HeadObjectCommand({
+        Bucket: env.DOCUMENTS_S3_BUCKET,
+        Key: key,
+      }));
+      return true;
+    } catch (error) {
+      const s3Error = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+      if (s3Error.name === 'NotFound' || s3Error.name === 'NoSuchKey' || s3Error.$metadata?.httpStatusCode === 404) {
+        return false;
+      }
       throw new ServiceUnavailableError('Document storage is temporarily unavailable');
     }
   }

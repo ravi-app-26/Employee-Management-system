@@ -21,7 +21,6 @@ import { Department } from './entities/department.entity';
 import { Employee } from './entities/employee.entity';
 import { EmployeeDocument } from './entities/employee-document.entity';
 import { User } from './entities/user.entity';
-
 const userRepository = new UserRepository(AppDataSource);
 const refreshTokenRepository = new RefreshTokenRepository(AppDataSource);
 

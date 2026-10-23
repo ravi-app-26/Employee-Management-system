@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { DataSource, IsNull, Repository } from 'typeorm';
-import { AuditLog, Employee, EmployeeDocument } from '../entities';
-import { BadRequestError, NotFoundError } from '../errors/app-error';
+import { AuditLog, Employee, EmployeeDocument, EmployeeDocumentStorage } from '../entities';
+import { BadRequestError, ConflictError, NotFoundError } from '../errors/app-error';
 import { env } from '../config/env';
 import { logger } from '../config/logger';
-import { sanitizeOriginalFilename, S3DocumentStorage, validateDocumentContent } from '../storage';
+import { sanitizeOriginalFilename, sha256, S3DocumentStorage, validateDocumentContent } from '../storage';
 import type { DocumentObjectStorage } from '../storage';
 
 export interface DocumentActor {
@@ -26,13 +26,34 @@ export class EmployeeDocumentService {
     await this.ensureEmployeeAccess(employeeId, actor, true);
     const validatedExtension = validateDocumentContent(file.mimetype, file.buffer);
     const originalName = sanitizeOriginalFilename(file.originalname);
+    const sha256Hash = sha256(file.buffer);
     const prefix = env.DOCUMENTS_S3_PREFIX.replace(/^\/+|\/+$/g, '') || 'uploads';
-    const key = `${prefix}/${employeeId}/${Date.now()}_${randomUUID()}.${validatedExtension}`;
+    let outcome: { document: EmployeeDocument; objectKey: string }
+      | { error: unknown }
+      | { duplicate: true };
     try {
-      await this.storage.put(key, file.buffer, file.mimetype);
-      const downloadUrl = await this.storage.presignDownload(key, originalName, file.mimetype);
-      return await this.dataSource.transaction(async (manager) => {
-        const document = await manager.save(EmployeeDocument, manager.create(EmployeeDocument, {
+      outcome = await this.dataSource.transaction(async (manager) => {
+      await manager.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`${employeeId}:${sha256Hash}`]);
+      let tracking = await manager.findOne(EmployeeDocumentStorage, {
+        where: { employeeId, sha256Hash },
+        lock: { mode: 'pessimistic_write' },
+      });
+      let document: EmployeeDocument;
+
+      if (tracking) {
+        if (tracking.isAvailable && tracking.uploadStatus === 'available'
+          && await this.storage.exists(tracking.s3ObjectKey)) {
+          return { duplicate: true as const };
+        }
+        document = await manager.findOneByOrFail(EmployeeDocument, { id: tracking.documentId });
+        document.deletedAt = null;
+        document.originalName = originalName;
+        document.mimeType = file.mimetype;
+        document.sizeBytes = file.size;
+        document.uploadedBy = actor.id;
+      } else {
+        const key = `${prefix}/${employeeId}/${Date.now()}_${randomUUID()}.${validatedExtension}`;
+        document = await manager.save(EmployeeDocument, manager.create(EmployeeDocument, {
           employeeId,
           originalName,
           mimeType: file.mimetype,
@@ -40,6 +61,25 @@ export class EmployeeDocumentService {
           objectKey: key,
           uploadedBy: actor.id,
         }));
+        tracking = manager.create(EmployeeDocumentStorage, {
+          documentId: document.id,
+          employeeId,
+          sha256Hash,
+          s3ObjectKey: key,
+          isAvailable: false,
+          uploadStatus: 'pending',
+        });
+      }
+
+      tracking.uploadStatus = 'uploading';
+      tracking.isAvailable = false;
+      await manager.save(EmployeeDocumentStorage, tracking);
+
+      try {
+        if (!(await this.storage.exists(tracking.s3ObjectKey))) {
+          await this.storage.put(tracking.s3ObjectKey, file.buffer, file.mimetype);
+        }
+        document = await manager.save(EmployeeDocument, document);
         await manager.save(AuditLog, manager.create(AuditLog, {
           actorUserId: actor.id,
           action: 'document.upload',
@@ -47,18 +87,32 @@ export class EmployeeDocumentService {
           resourceId: document.id,
           requestId,
         }));
-        return {
-          ...this.publicDocument(document),
-          downloadUrl,
-          expiresInSeconds: env.DOCUMENT_DOWNLOAD_URL_TTL_SECONDS,
-        };
+        tracking.uploadStatus = 'available';
+        tracking.isAvailable = true;
+        await manager.save(EmployeeDocumentStorage, tracking);
+        return { document, objectKey: tracking.s3ObjectKey };
+      } catch (error) {
+        tracking.uploadStatus = 'failed';
+        tracking.isAvailable = false;
+        await manager.save(EmployeeDocumentStorage, tracking);
+        return { error };
+      }
       });
     } catch (error) {
-      await this.storage.delete(key).catch((cleanupError: unknown) => {
-        logger.warn({ objectKey: key, err: cleanupError }, 'Failed to clean up uploaded document object');
+      await this.markTrackingUnavailable(employeeId, sha256Hash).catch((trackingError: unknown) => {
+        logger.warn({ employeeId, sha256Hash, err: trackingError }, 'Failed to mark document storage unavailable after transaction failure');
       });
       throw error;
     }
+
+    if ('error' in outcome) throw outcome.error;
+    if ('duplicate' in outcome) throw new ConflictError('This document has already been uploaded');
+    const downloadUrl = await this.storage.presignDownload(outcome.objectKey, originalName, file.mimetype);
+    return {
+      ...this.publicDocument(outcome.document),
+      downloadUrl,
+      expiresInSeconds: env.DOCUMENT_DOWNLOAD_URL_TTL_SECONDS,
+    };
   }
 
   assertCanWrite(employeeId: string, actor: DocumentActor): Promise<void> {
@@ -138,6 +192,22 @@ export class EmployeeDocumentService {
       .getOne();
     if (!document) throw new NotFoundError('Document not found');
     return document;
+  }
+
+  private async markTrackingUnavailable(employeeId: string, sha256Hash: string): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      await manager.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`${employeeId}:${sha256Hash}`]);
+      const tracking = await manager.findOne(EmployeeDocumentStorage, {
+        where: { employeeId, sha256Hash },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!tracking) return;
+      if (tracking.isAvailable && tracking.uploadStatus === 'available'
+        && await this.storage.exists(tracking.s3ObjectKey)) return;
+      tracking.isAvailable = false;
+      tracking.uploadStatus = 'failed';
+      await manager.save(EmployeeDocumentStorage, tracking);
+    });
   }
 
   private async ensureEmployeeAccess(employeeId: string, actor: DocumentActor, write: boolean): Promise<void> {

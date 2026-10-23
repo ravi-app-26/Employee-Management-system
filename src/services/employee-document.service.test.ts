@@ -1,12 +1,12 @@
 import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { S3Client } from '@aws-sdk/client-s3';
+import { HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { env } from '../config/env';
-import { AuditLog, Employee, EmployeeDocument } from '../entities';
-import { BadRequestError, NotFoundError, ServiceUnavailableError } from '../errors/app-error';
+import { AuditLog, Employee, EmployeeDocument, EmployeeDocumentStorage } from '../entities';
+import { BadRequestError, ConflictError, NotFoundError, ServiceUnavailableError } from '../errors/app-error';
 import { EmployeeDocumentService } from './employee-document.service';
-import { documentUpload, DocumentObjectStorage, S3DocumentStorage, StoredObject } from '../storage';
+import { documentUpload, DocumentObjectStorage, S3DocumentStorage, StoredObject, sha256 } from '../storage';
 
 const employeeId = '5a92a7c2-61ac-4e03-8494-5eb119cd57f1';
 const actorId = 'd9428888-122b-4b20-9e2a-63e4c4a99b7e';
@@ -26,11 +26,25 @@ const activeDocument = {
   deletedAt: null,
 } as EmployeeDocument;
 
-function createHarness(options: { databaseFailure?: boolean; uploadFailure?: boolean; documents?: EmployeeDocument[]; objects?: StoredObject[] } = {}) {
+function createHarness(options: {
+  databaseFailure?: boolean;
+  auditFailure?: boolean;
+  uploadFailure?: boolean;
+  existingTracking?: EmployeeDocumentStorage;
+  documents?: EmployeeDocument[];
+  objects?: StoredObject[];
+  s3ObjectExists?: boolean;
+} = {}) {
+  const trackingRows = options.existingTracking ? [options.existingTracking] : [];
+  const existingObjects = new Set<string>(options.s3ObjectExists && options.existingTracking
+    ? [options.existingTracking.s3ObjectKey]
+    : []);
   const storage: jest.Mocked<DocumentObjectStorage> = {
-    put: jest.fn<DocumentObjectStorage['put']>().mockImplementation(async () => {
+    put: jest.fn<DocumentObjectStorage['put']>().mockImplementation(async (key) => {
       if (options.uploadFailure) throw new ServiceUnavailableError('storage unavailable');
+      existingObjects.add(key);
     }),
+    exists: jest.fn<DocumentObjectStorage['exists']>().mockImplementation(async (key) => existingObjects.has(key)),
     presignDownload: jest.fn<DocumentObjectStorage['presignDownload']>()
       .mockResolvedValue('https://s3.example.test/signed-download'),
     delete: jest.fn<DocumentObjectStorage['delete']>().mockResolvedValue(undefined),
@@ -40,12 +54,27 @@ function createHarness(options: { databaseFailure?: boolean; uploadFailure?: boo
   const manager = {
     create: (_entity: unknown, value: Record<string, unknown>) => value,
     save: jest.fn(async (entity: unknown, value: Record<string, unknown>) => {
-      if (options.databaseFailure) throw new Error('database unavailable');
+      if (options.databaseFailure && entity === EmployeeDocument) throw new Error('database unavailable');
+      if (options.auditFailure && entity === AuditLog) throw new Error('database unavailable');
       saved.push({ entity, value });
-      return entity === EmployeeDocument
-        ? { ...value, id: documentId, createdAt: activeDocument.createdAt, deletedAt: null }
-        : value;
+      if (entity === EmployeeDocument) {
+        return { ...value, id: documentId, createdAt: activeDocument.createdAt, deletedAt: null };
+      }
+      if (entity === EmployeeDocumentStorage) {
+        const row = value as unknown as EmployeeDocumentStorage;
+        const index = trackingRows.findIndex((existing) => existing.employeeId === row.employeeId
+          && existing.sha256Hash === row.sha256Hash);
+        if (index === -1) trackingRows.push(row);
+        else trackingRows[index] = row;
+      }
+      return value;
     }),
+    query: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(undefined),
+    findOne: jest.fn(async (_entity: unknown, options: { where: { employeeId: string; sha256Hash: string } }) => (
+      trackingRows.find((row) => row.employeeId === options.where.employeeId
+        && row.sha256Hash === options.where.sha256Hash) ?? null
+    )),
+    findOneByOrFail: jest.fn(async () => activeDocument),
   };
   const transaction = jest.fn(async (callback: (transactionManager: typeof manager) => unknown) => callback(manager));
   const documentQuery = {
@@ -136,15 +165,28 @@ describe('EmployeeDocumentService S3 storage', () => {
     expect(harness.storage.put).not.toHaveBeenCalled();
   });
 
-  it('uses a distinct object key for duplicate original filenames', async () => {
+  it('returns a conflict for repeated content when the tracked S3 object is available', async () => {
     const harness = createHarness();
-    await harness.service.upload(employeeId, validFile(), actor, 'request-duplicate-1');
-    await harness.service.upload(employeeId, validFile(), actor, 'request-duplicate-2');
+    const first = await harness.service.upload(employeeId, validFile(), actor, 'request-duplicate-1');
 
-    const firstKey = harness.storage.put.mock.calls[0][0];
-    const secondKey = harness.storage.put.mock.calls[1][0];
-    expect(firstKey).not.toBe(secondKey);
-    expect(firstKey).toMatch(new RegExp(`^uploads/${employeeId}/\\d+_[0-9a-f-]+\\.pdf$`));
+    await expect(harness.service.upload(employeeId, validFile(), actor, 'request-duplicate-2'))
+      .rejects.toBeInstanceOf(ConflictError);
+    expect(harness.storage.put).toHaveBeenCalledTimes(1);
+    expect(harness.storage.exists).toHaveBeenCalledTimes(2);
+    expect(first.id).toBe(documentId);
+    expect(harness.saved.some(({ entity, value }) => entity === EmployeeDocumentStorage
+      && value.sha256Hash === sha256(pdf)
+      && value.isAvailable === true
+      && value.uploadStatus === 'available')).toBe(true);
+  });
+
+  it('uploads different content even when the original filename matches', async () => {
+    const harness = createHarness();
+    await harness.service.upload(employeeId, validFile(), actor, 'request-different-1');
+    await harness.service.upload(employeeId, validFile({ buffer: Buffer.from('%PDF-1.7 other content') }), actor, 'request-different-2');
+
+    expect(harness.storage.put).toHaveBeenCalledTimes(2);
+    expect(harness.manager.query).toHaveBeenCalledTimes(2);
   });
 
   it('denies access to another employee before writing to S3', async () => {
@@ -181,8 +223,8 @@ describe('EmployeeDocumentService S3 storage', () => {
 
     await expect(harness.service.upload(employeeId, validFile(), actor, 'request-6'))
       .rejects.toBeInstanceOf(ServiceUnavailableError);
-    expect(harness.storage.delete).toHaveBeenCalledWith(expect.stringMatching(/^uploads\//));
-    expect(harness.transaction).not.toHaveBeenCalled();
+    expect(harness.storage.delete).not.toHaveBeenCalled();
+    expect(harness.transaction).toHaveBeenCalledTimes(1);
   });
 
   it('maps AWS SDK errors to a safe storage-unavailable error', async () => {
@@ -197,12 +239,46 @@ describe('EmployeeDocumentService S3 storage', () => {
       .rejects.toBeInstanceOf(ServiceUnavailableError);
   });
 
-  it('deletes the uploaded object when PostgreSQL metadata/audit transaction fails', async () => {
-    const harness = createHarness({ databaseFailure: true });
+  it('uses HeadObject to detect a missing S3 object', async () => {
+    const send = jest.fn<(command: unknown) => Promise<unknown>>()
+      .mockRejectedValueOnce(Object.assign(new Error('missing'), { name: 'NotFound' }))
+      .mockResolvedValueOnce({});
+    const storage = new S3DocumentStorage({ send } as unknown as S3Client);
+
+    await expect(storage.exists('uploads/missing.pdf')).resolves.toBe(false);
+    await expect(storage.exists('uploads/present.pdf')).resolves.toBe(true);
+    expect(send.mock.calls[0][0]).toBeInstanceOf(HeadObjectCommand);
+  });
+
+  it('keeps an uploaded object and marks tracking unavailable when audit persistence fails', async () => {
+    const harness = createHarness({ auditFailure: true });
 
     await expect(harness.service.upload(employeeId, validFile(), actor, 'request-7')).rejects.toThrow('database unavailable');
     expect(harness.storage.put).toHaveBeenCalledTimes(1);
-    expect(harness.storage.delete).toHaveBeenCalledWith(expect.stringMatching(/^uploads\//));
+    expect(harness.storage.delete).not.toHaveBeenCalled();
+    expect(harness.saved.some(({ entity, value }) => entity === EmployeeDocumentStorage
+      && value.isAvailable === false && value.uploadStatus === 'failed')).toBe(true);
+  });
+
+  it('repairs an unavailable tracked object when HeadObject reports it missing', async () => {
+    const existingTracking = {
+      id: 'ea842f73-a3a2-4356-9388-41507dc75c55',
+      documentId,
+      employeeId,
+      sha256Hash: sha256(pdf),
+      s3ObjectKey: 'uploads/recoverable.pdf',
+      isAvailable: false,
+      uploadStatus: 'failed',
+    } as EmployeeDocumentStorage;
+    const harness = createHarness({ existingTracking });
+
+    const result = await harness.service.upload(employeeId, validFile(), actor, 'request-repair');
+
+    expect(harness.storage.exists).toHaveBeenCalledWith('uploads/recoverable.pdf');
+    expect(harness.storage.put).toHaveBeenCalledWith('uploads/recoverable.pdf', pdf, 'application/pdf');
+    expect(result.id).toBe(documentId);
+    expect(harness.saved.some(({ entity, value }) => entity === EmployeeDocumentStorage
+      && value.isAvailable === true && value.uploadStatus === 'available')).toBe(true);
   });
 
   it('purges expired soft-deleted objects and old S3 orphans during cleanup', async () => {

@@ -21,7 +21,6 @@ export class DepartmentRepository {
     );
   }
 
-  // ...existing code...
   async findAll(
     page: number,
     limit: number,
@@ -44,7 +43,6 @@ export class DepartmentRepository {
       },
     };
   }
-// ...existing code...
 
   findById(id: string): Promise<Department | null> {
     return this.repo.findOne({ where: { id } });
