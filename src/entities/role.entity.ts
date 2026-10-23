@@ -11,13 +11,13 @@ import { Permission } from './permission.entity';
 @Entity('roles')
 export class Role {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
 
   @Column({ type: 'varchar', length: 30, unique: true })
-  name: string;
+  name!: string;
 
   @Column({ type: 'text', nullable: true })
-  description: string | null;
+  description!: string | null;
 
   // role_permissions join table pehle se DB me hai, uska mapping yahan hai
   @ManyToMany(() => Permission, (permission) => permission.roles)
@@ -26,5 +26,5 @@ export class Role {
     joinColumn: { name: 'role_id', referencedColumnName: 'id' },
     inverseJoinColumn: { name: 'permission_id', referencedColumnName: 'id' },
   })
-  permissions: Relation<Permission[]>;
+  permissions!: Relation<Permission[]>;
 }

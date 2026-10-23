@@ -122,9 +122,15 @@ export class AuthService {
       throw new UnauthorizedError('Invalid refresh token');
     }
 
-    // ROTATION: purana revoke, naya issue (same family)
-    await this.refreshTokens.revoke(stored.id);
-    const refreshToken = await this.issueRefreshToken(user.id, stored.familyId);
+    // Revoke the old token and persist its replacement atomically.
+    const refreshToken = randomBytes(48).toString('hex');
+    const rotated = await this.refreshTokens.rotate(stored.id, stored.familyId, {
+      userId: user.id,
+      tokenHash: this.hashToken(refreshToken),
+      expiresAt: new Date(Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000),
+    });
+    if (!rotated) throw new UnauthorizedError('Invalid refresh token');
+
     const accessToken = this.signAccessToken({
       sub: user.id,
       role: user.role.name,
@@ -178,14 +184,18 @@ export class AuthService {
     await this.refreshTokens.revokeAllForUser(userId);
   }
 
-    async register(input: {
+    async register(
+      input: {
     firstName: string;
     lastName: string;
     email: string;
     password: string;
     departmentId: string;
     jobTitle: string;
-  }): Promise<{ id: string; email: string }> {
+    },
+    actorUserId: string,
+    requestId: string,
+  ): Promise<{ id: string; email: string }> {
     const passwordHash = await bcrypt.hash(input.password, env.BCRYPT_ROUNDS);
 
     // Role hardcoded hai, client role nahi chun sakta
@@ -197,6 +207,12 @@ export class AuthService {
       jobTitle: input.jobTitle,
       passwordHash,
       roleName: 'employee',
+      audit: {
+        actorUserId,
+        action: 'employee.create',
+        resourceType: 'employee',
+        requestId,
+      },
     });
 
     return { id: user.id, email: user.email };

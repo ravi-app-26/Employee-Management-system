@@ -17,6 +17,8 @@ import { EmployeeController } from './controllers/employee.controller';
 import { EmployeeDocumentController } from './controllers/employee-document.controller';
 import { EmployeeDocument } from './entities/employee-document.entity';
 import { EmployeeDocumentService } from './services/employee-document.service';
+import { UserService } from './services/user.service';
+import { UserController } from './controllers/user.controller';
 // ...existing code...
 const userRepository = new UserRepository(AppDataSource);
 const refreshTokenRepository = new RefreshTokenRepository(AppDataSource);
@@ -35,6 +37,7 @@ const employeeService = new EmployeeService(
 	AppDataSource.getRepository(Employee),
 	AppDataSource.getRepository(Department),
 	AppDataSource.getRepository(User),
+	userRepository,
 );
 export const employeeController = new EmployeeController(employeeService);
 export const employeeDocumentService = new EmployeeDocumentService(
@@ -43,3 +46,4 @@ export const employeeDocumentService = new EmployeeDocumentService(
 	AppDataSource.getRepository(Employee),
 );
 export const employeeDocumentController = new EmployeeDocumentController(employeeDocumentService);
+export const userController = new UserController(new UserService(AppDataSource));

@@ -3,6 +3,7 @@ import { ZodError } from 'zod';
 import { AppError } from '../errors/app-error';
 import { MulterError } from '../services/document-storage';
 import { env } from '../config/env';
+import { logger } from '../config/logger';
 
 export class ErrorHandlerMiddleware {
   static handle: ErrorRequestHandler = (err, req, res, _next) => {
@@ -62,7 +63,7 @@ export class ErrorHandlerMiddleware {
     }
 
     if (status >= 500) {
-      console.error({ requestId: req.id, message: err?.message, stack: err?.stack });
+      logger.error({ requestId: req.id, err }, 'Request failed');
     }
 
     res.status(status).json({

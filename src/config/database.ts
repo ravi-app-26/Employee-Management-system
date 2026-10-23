@@ -7,7 +7,12 @@ export const AppDataSource = new DataSource({//new DataSource() sirf configurati
   url: env.DATABASE_URL,
   entities: [__dirname + '/../entities/*.entity.{ts,js}'],
   synchronize: false,
-  logging: env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+  logging:
+    env.NODE_ENV === 'test'
+      ? false
+      : env.NODE_ENV === 'development'
+        ? ['error', 'warn']
+        : ['error'],
   extra: {
     max: 10,
     connectionTimeoutMillis: env.DB_CONNECT_TIMEOUT_MS,

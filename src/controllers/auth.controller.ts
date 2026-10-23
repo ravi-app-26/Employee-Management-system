@@ -20,7 +20,7 @@ export class AuthController {
   constructor(private readonly service: AuthService) {}
 
   register = async (req: Request, res: Response) => {
-    const user = await this.service.register(req.body);
+    const user = await this.service.register(req.body, req.user!.id, req.id);
     ApiResponse.created(res, user);
   };
 

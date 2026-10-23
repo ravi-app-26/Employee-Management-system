@@ -1,9 +1,14 @@
 import 'dotenv/config';
 import { z } from 'zod';
+import { logger } from './logger';
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3000),
+  CORS_ORIGINS: z.string().default('http://localhost:5173').transform((value) =>
+    value.split(',').map((origin) => origin.trim()).filter(Boolean),
+  ),
+  TRUST_PROXY: z.coerce.number().int().nonnegative().default(0),
   DATABASE_URL: z.string().min(1),
   JWT_ACCESS_SECRET: z.string().min(32, 'must be at least 32 characters'),
   JWT_ACCESS_TTL: z.string().default('15m'),
@@ -25,9 +30,9 @@ const schema = z.object({
 const parsed = schema.safeParse(process.env);//environment variables (.env) ko Zod schema ke according validate karna, bina error throw kiye.
 
 if (!parsed.success) {
-  console.error('Invalid environment configuration:');
+  logger.error('Invalid environment configuration');
   for (const issue of parsed.error.issues) {//validation ki saari errors deta hai.
-    console.error(` - ${issue.path.join('.')}: ${issue.message}`);
+    logger.error({ configPath: issue.path.join('.'), validationMessage: issue.message });
   }
   process.exit(1);//if configuration is wrong app closed
 }

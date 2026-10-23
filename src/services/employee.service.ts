@@ -1,10 +1,16 @@
 import { IsNull, Repository } from 'typeorm';
+import bcrypt from 'bcrypt';
+import { randomBytes } from 'node:crypto';
 import { Department } from '../entities/department.entity';
 import { Employee } from '../entities/employee.entity';
 import { RefreshToken } from '../entities/refresh-token.entity';
 import { User } from '../entities/user.entity';
-import { BadRequestError, NotFoundError } from '../errors/app-error';
+import { EmployeeDto, toEmployeeDto } from '../dto/employee.dto';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/app-error';
+import { env } from '../config/env';
 import { EmployeeListFilters, EmployeeRepository } from '../repositories/employee.repository';
+import { UserRepository } from '../repositories/user.repository';
+import { writeAuditLog } from '../utils/write-audit-log';
 import {
   CreateEmployeeInput,
   UpdateEmployeeInput,
@@ -17,41 +23,62 @@ export interface EmployeeActor {
   employeeId: string;
 }
 
-type EmployeeView = Employee & {
-  firstName: string | null;
-  lastName: string | null;
-  workEmail: string | null;
-};
-
 export class EmployeeService {
   constructor(
     private readonly employees: Repository<Employee>,
     private readonly departments: Repository<Department>,
     private readonly users: Repository<User>,
+    private readonly userRepository: UserRepository,
   ) {}
 
-  list(filters: EmployeeListFilters, actor: EmployeeActor) {
-    return EmployeeRepository.list(this.employees, {
+  async list(filters: EmployeeListFilters, actor: EmployeeActor) {
+    const result = await EmployeeRepository.list(this.employees, {
       ...filters,
       scope: { role: actor.role, employeeId: actor.employeeId },
     });
+    const data = result.data.map((employee) =>
+      toEmployeeDto(employee, {
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        workEmail: employee.workEmail,
+      }),
+    );
+    return { data, pagination: result.pagination };
   }
 
-  async create(input: CreateEmployeeInput): Promise<EmployeeView> {
+  async create(
+    input: CreateEmployeeInput,
+    actorUserId: string,
+    requestId: string,
+  ): Promise<EmployeeDto> {
     if (!(await this.departments.exists({ where: { id: input.departmentId } }))) {
       throw new NotFoundError('Department not found');
     }
     if (input.managerId) await this.requireEmployee(input.managerId);
 
-    const employee = this.employees.create({
-      ...input,
-      phone: input.phone ?? null,
+    const password = input.password ?? randomBytes(32).toString('base64url');
+    const user = await this.userRepository.createEmployeeWithUser({
+      firstName: input.firstName,
+      lastName: input.lastName,
+      email: input.workEmail,
+      passwordHash: await bcrypt.hash(password, env.BCRYPT_ROUNDS),
+      departmentId: input.departmentId,
       managerId: input.managerId ?? null,
+      phone: input.phone ?? null,
+      jobTitle: input.jobTitle,
+      joiningDate: input.joiningDate,
+      roleName: 'employee',
+      audit: {
+        actorUserId,
+        action: 'employee.create',
+        resourceType: 'employee',
+        requestId,
+      },
     });
-    return this.withIdentity(await this.employees.save(employee));
+    return this.withIdentity(await this.requireEmployee(user.employeeId));
   }
 
-  async getById(id: string, actor: EmployeeActor): Promise<EmployeeView> {
+  async getById(id: string, actor: EmployeeActor): Promise<EmployeeDto> {
     const employee = await this.requireEmployee(id);
     this.ensureRecordAccess(employee, actor);
     return this.withIdentity(employee);
@@ -61,8 +88,12 @@ export class EmployeeService {
     id: string,
     input: UpdateEmployeeInput,
     actor: EmployeeActor,
-  ): Promise<EmployeeView> {
+    requestId: string,
+  ): Promise<EmployeeDto> {
     const employee = await this.requireEmployee(id);
+    if (actor.role === 'manager' && employee.id === actor.employeeId) {
+      throw new ForbiddenError('Managers must update their own profile through /me');
+    }
     this.ensureRecordAccess(employee, actor);
 
     if (input.departmentId && !(await this.departments.exists({ where: { id: input.departmentId } }))) {
@@ -73,8 +104,11 @@ export class EmployeeService {
       await this.requireEmployee(input.managerId);
     }
 
-    const { firstName, lastName, workEmail, ...employeeFields } = input;
+    const { firstName, lastName, workEmail, employmentStatus, ...employeeFields } = input;
     Object.assign(employee, employeeFields);
+    if (employmentStatus !== undefined && employmentStatus !== 'inactive') {
+      employee.employmentStatus = employmentStatus;
+    }
     await this.employees.manager.transaction(async (manager) => {
       await manager.save(Employee, employee);
       if (firstName !== undefined || lastName !== undefined || workEmail !== undefined) {
@@ -85,11 +119,22 @@ export class EmployeeService {
         if (workEmail !== undefined) user.email = workEmail;
         await manager.save(User, user);
       }
+      await writeAuditLog(manager, {
+        actorUserId: actor.id,
+        action: 'employee.update',
+        resourceType: 'employee',
+        resourceId: id,
+        requestId,
+      });
     });
+    if (employmentStatus === 'inactive') {
+      await this.deactivate(id, actor, requestId);
+      return this.withIdentity(await this.requireEmployee(id));
+    }
     return this.withIdentity(employee);
   }
 
-  async deactivate(id: string, actor: EmployeeActor): Promise<void> {
+  async deactivate(id: string, actor: EmployeeActor, requestId: string): Promise<void> {
     const employee = await this.requireEmployee(id);
     this.ensureRecordAccess(employee, actor);
 
@@ -109,17 +154,25 @@ export class EmployeeService {
           { revokedAt: new Date() },
         );
       }
+      await writeAuditLog(manager, {
+        actorUserId: actor.id,
+        action: 'employee.deactivate',
+        resourceType: 'employee',
+        resourceId: id,
+        requestId,
+      });
     });
   }
 
-  async getOwnProfile(actor: EmployeeActor): Promise<EmployeeView> {
+  async getOwnProfile(actor: EmployeeActor): Promise<EmployeeDto> {
     return this.withIdentity(await this.requireEmployee(actor.employeeId));
   }
 
   async updateOwnProfile(
     actor: EmployeeActor,
     input: UpdateOwnEmployeeProfileInput,
-  ): Promise<EmployeeView> {
+    requestId: string,
+  ): Promise<EmployeeDto> {
     const employee = await this.requireEmployee(actor.employeeId);
     if (input.phone !== undefined) employee.phone = input.phone;
     await this.employees.manager.transaction(async (manager) => {
@@ -129,6 +182,13 @@ export class EmployeeService {
       if (input.firstName !== undefined) user.firstName = input.firstName;
       if (input.lastName !== undefined) user.lastName = input.lastName;
       await manager.save(User, user);
+      await writeAuditLog(manager, {
+        actorUserId: actor.id,
+        action: 'employee.update',
+        resourceType: 'employee',
+        resourceId: employee.id,
+        requestId,
+      });
     });
     return this.withIdentity(employee);
   }
@@ -139,14 +199,13 @@ export class EmployeeService {
     return employee;
   }
 
-  private async withIdentity(employee: Employee): Promise<EmployeeView> {
+  private async withIdentity(employee: Employee): Promise<EmployeeDto> {
     const user = await this.users.findOneBy({ employeeId: employee.id });
-    return {
-      ...employee,
+    return toEmployeeDto(employee, {
       firstName: user?.firstName ?? null,
       lastName: user?.lastName ?? null,
       workEmail: user?.email ?? null,
-    };
+    });
   }
 
   private ensureRecordAccess(employee: Employee, actor: EmployeeActor): void {

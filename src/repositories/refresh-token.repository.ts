@@ -22,6 +22,36 @@ export class RefreshTokenRepository {
     return this.repo.findOne({ where: { tokenHash } });
   }
 
+  async rotate(
+    tokenId: string,
+    familyId: string,
+    replacement: {
+      userId: string;
+      tokenHash: string;
+      expiresAt: Date;
+    },
+  ): Promise<boolean> {
+    return this.repo.manager.transaction(async (manager) => {
+      const result = await manager.update(
+        RefreshToken,
+        { id: tokenId, revokedAt: IsNull() },
+        { revokedAt: new Date() },
+      );
+
+      if (result.affected !== 1) {
+        await manager.update(
+          RefreshToken,
+          { familyId, revokedAt: IsNull() },
+          { revokedAt: new Date() },
+        );
+        return false;
+      }
+
+      await manager.insert(RefreshToken, { ...replacement, familyId });
+      return true;
+    });
+  }
+
   async listActiveSessions(userId: string, now = new Date()) {
     return this.repo
       .createQueryBuilder('token')

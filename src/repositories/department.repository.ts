@@ -1,5 +1,13 @@
 import { DataSource, Repository } from 'typeorm';
 import { Department } from '../entities/department.entity';
+import { DEPARTMENT_SORT_FIELDS } from '../validators/department.validator';
+
+type DepartmentSortField = (typeof DEPARTMENT_SORT_FIELDS)[number];
+
+const DEPARTMENT_SORT_COLUMNS: Record<DepartmentSortField, keyof Department> = {
+  name: 'name',
+  createdAt: 'createdAt',
+};
 
 export class DepartmentRepository {
   private readonly repo: Repository<Department>;
@@ -15,9 +23,14 @@ export class DepartmentRepository {
   }
 
   // ...existing code...
-  async findAll(page: number, limit: number) {
+  async findAll(
+    page: number,
+    limit: number,
+    sortBy: DepartmentSortField,
+    order: 'asc' | 'desc',
+  ) {
     const [data, total] = await this.repo.findAndCount({
-      order: { name: 'ASC' },
+      order: { [DEPARTMENT_SORT_COLUMNS[sortBy]]: order.toUpperCase() as 'ASC' | 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
     });

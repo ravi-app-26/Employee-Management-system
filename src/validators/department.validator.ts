@@ -1,9 +1,15 @@
 import { z } from 'zod';
 // ...existing code...
-import { paginationShape } from './pagination.validator';
+import { paginationShape, sortOrder } from './pagination.validator';
+
+export const DEPARTMENT_SORT_FIELDS = ['name', 'createdAt'] as const;
 
 export const listDepartmentsQuerySchema = z
-  .object(paginationShape)
+  .object({
+    ...paginationShape,
+    sortBy: z.enum(DEPARTMENT_SORT_FIELDS).default('name'),
+    order: sortOrder,
+  })
   .strict();
 
 export type ListDepartmentsQuery = z.infer<typeof listDepartmentsQuerySchema>;

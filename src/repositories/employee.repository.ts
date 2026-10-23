@@ -5,6 +5,12 @@ import { EMPLOYEE_SORT_FIELDS } from '../validators/employee.validator';
 
 type SortField = (typeof EMPLOYEE_SORT_FIELDS)[number];
 
+export type EmployeeListRecord = Employee & {
+  firstName: string | null;
+  lastName: string | null;
+  workEmail: string | null;
+};
+
 const SORT_COLUMNS: Record<SortField, string> = {
   firstName: 'u.first_name',
   lastName: 'u.last_name',
@@ -32,7 +38,10 @@ export class EmployeeRepository {
   static async list(
     employeeRepository: Repository<Employee>,
     filters: EmployeeListFilters,
-  ) {
+  ): Promise<{
+    data: EmployeeListRecord[];
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  }> {
   const query = employeeRepository.createQueryBuilder('e');
   query
     .leftJoin(User, 'u', 'u.employee_id = e.id')
@@ -70,14 +79,14 @@ export class EmployeeRepository {
   query
     .orderBy(SORT_COLUMNS[filters.sortBy], filters.order.toUpperCase() as 'ASC' | 'DESC')
     .addOrderBy('e.id', 'ASC')
-    .skip((filters.page - 1) * filters.limit)
-    .take(filters.limit);
+    .offset((filters.page - 1) * filters.limit)
+    .limit(filters.limit);
 
   const { raw, entities: employees } = await query.getRawAndEntities();
   const total = await query.getCount();
 
   return {
-    data: employees.map((employee, index) => ({
+    data: employees.map((employee, index): EmployeeListRecord => ({
       ...employee,
       firstName: raw[index].user_first_name ?? null,
       lastName: raw[index].user_last_name ?? null,

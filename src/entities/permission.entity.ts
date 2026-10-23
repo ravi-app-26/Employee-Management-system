@@ -4,14 +4,14 @@ import { Role } from './role.entity';
 @Entity('permissions')
 export class Permission {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
 
   @Column({ type: 'varchar', length: 60, unique: true })
-  name: string;
+  name!: string;
 
   @Column({ type: 'text', nullable: true })
-  description: string | null;
+  description!: string | null;
 
   @ManyToMany(() => Role, (role) => role.permissions)
-  roles: Relation<Role[]>;
+  roles!: Relation<Role[]>;
 }

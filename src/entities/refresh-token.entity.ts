@@ -12,28 +12,28 @@ import { User } from './user.entity';
 @Entity('refresh_tokens')
 export class RefreshToken {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column({ name: 'user_id', type: 'uuid' })
-  userId: string;
+  userId!: string;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
-  user: Relation<User>;
+  user!: Relation<User>;
 
   // Asli token nahi, sirf uska SHA-256 hash
   @Column({ name: 'token_hash', type: 'char', length: 64, unique: true })
-  tokenHash: string;
+  tokenHash!: string;
 
   @Column({ name: 'family_id', type: 'uuid' })
-  familyId: string;
+  familyId!: string;
 
   @Column({ name: 'expires_at', type: 'timestamptz' })
-  expiresAt: Date;
+  expiresAt!: Date;
 
   @Column({ name: 'revoked_at', type: 'timestamptz', nullable: true })
-  revokedAt: Date | null;
+  revokedAt!: Date | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
-  createdAt: Date;
+  createdAt!: Date;
 }

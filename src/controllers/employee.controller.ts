@@ -6,6 +6,7 @@ import {
   listEmployeesQuerySchema,
   updateEmployeeSchema,
   updateOwnEmployeeProfileSchema,
+  updateTeamMemberSchema,
 } from '../validators/employee.validator';
 
 export class EmployeeController {
@@ -18,7 +19,7 @@ export class EmployeeController {
 
   create = async (req: Request, res: Response) => {
     const input = createEmployeeSchema.parse(req.body);
-    ApiResponse.created(res, await this.service.create(input));
+    ApiResponse.created(res, await this.service.create(input, req.user!.id, req.id));
   };
 
   getById = async (req: Request, res: Response) => {
@@ -29,15 +30,17 @@ export class EmployeeController {
   };
 
   update = async (req: Request, res: Response) => {
-    const input = updateEmployeeSchema.parse(req.body);
+    const input = req.user!.role === 'manager'
+      ? updateTeamMemberSchema.parse(req.body)
+      : updateEmployeeSchema.parse(req.body);
     ApiResponse.ok(
       res,
-      await this.service.update(String(req.params.id), input, req.user!),
+        await this.service.update(String(req.params.id), input, req.user!, req.id),
     );
   };
 
   deactivate = async (req: Request, res: Response) => {
-    await this.service.deactivate(String(req.params.id), req.user!);
+    await this.service.deactivate(String(req.params.id), req.user!, req.id);
     ApiResponse.noContent(res);
   };
 
@@ -47,6 +50,6 @@ export class EmployeeController {
 
   updateOwnProfile = async (req: Request, res: Response) => {
     const input = updateOwnEmployeeProfileSchema.parse(req.body);
-    ApiResponse.ok(res, await this.service.updateOwnProfile(req.user!, input));
+    ApiResponse.ok(res, await this.service.updateOwnProfile(req.user!, input, req.id));
   };
 }

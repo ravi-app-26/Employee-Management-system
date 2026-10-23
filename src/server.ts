@@ -4,6 +4,7 @@ import { AppDataSource } from './config/database';
 import { Server } from 'node:http';
 import { employeeDocumentService } from './container';
 import { RetryPolicy } from './utils/retry-policy';
+import { logger } from './config/logger';
 
 export class ApplicationServer {
   private server?: Server;
@@ -12,10 +13,10 @@ export class ApplicationServer {
   async start(): Promise<void> {
     await this.initializeDatabase();
     await employeeDocumentService.cleanupLocalFiles();
-    console.log('Database connected (TypeORM)');
+    logger.info('Database connected (TypeORM)');
 
     this.server = app.listen(env.PORT, () => {
-      console.log(`Server running on port ${env.PORT} (${env.NODE_ENV})`);
+      logger.info({ port: env.PORT, environment: env.NODE_ENV }, 'Server listening');
     });
 
     process.once('SIGTERM', () => void this.shutdown());
@@ -45,7 +46,7 @@ export class ApplicationServer {
       if (AppDataSource.isInitialized) await AppDataSource.destroy();
       process.exitCode = 0;
     } catch (error) {
-      console.error('Graceful shutdown failed:', error);
+      logger.error({ err: error }, 'Graceful shutdown failed');
       process.exitCode = 1;
     } finally {
       clearTimeout(forceCloseTimer);
@@ -54,6 +55,6 @@ export class ApplicationServer {
 }
 
 void new ApplicationServer().start().catch((error: unknown) => {
-  console.error('Server startup failed:', error);
+  logger.error({ err: error }, 'Server startup failed');
   process.exitCode = 1;
 });

@@ -12,7 +12,9 @@ import { EmployeeRoutes } from './routes/employee.routes';
 import { HealthController } from './controllers/health.controller';
 import { EmployeeDocumentRoutes } from './routes/employee-document.routes';
 import { DocumentRoutes } from './routes/document.routes';
+import { UserRoutes } from './routes/user.routes';
 import { RateLimitMiddleware } from './middlewares/rate-limiter';
+import { env } from './config/env';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
 import {
@@ -22,14 +24,16 @@ import {
   departmentController,
   employeeController,
   employeeDocumentController,
+  userController,
 } from './container';
 
 export const app = express();
 
+app.set('trust proxy', env.TRUST_PROXY);
 app.use(RequestIdMiddleware.handle);
 app.use(RateLimitMiddleware.handle);
 app.use(helmet());
-app.use(cors());
+app.use(cors({ origin: env.CORS_ORIGINS }));
 app.use(express.json({ limit: '10kb' }));
 app.use(cookieParser());
 
@@ -41,6 +45,7 @@ app.use(
   '/api/v1/auth',
   AuthRoutes.create(authController, authenticateMiddleware, authorizationService),
 );
+app.use('/api/v1', UserRoutes.create(userController, authenticateMiddleware, authorizationService));
 
 app.use(
   '/api/v1/departments',
