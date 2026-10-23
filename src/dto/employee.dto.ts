@@ -1,9 +1,4 @@
-<<<<<<< Updated upstream
 import { Employee } from '../entities/employee.entity';
-=======
-import { Employee } from '../entities';
->>>>>>> Stashed changes
-
 export interface EmployeeDto {
   id: string;
   firstName: string | null;

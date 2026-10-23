@@ -1,16 +1,8 @@
 import { DataSource, Repository } from 'typeorm';
-<<<<<<< Updated upstream
 import { User } from '../entities/user.entity';
 import { Employee } from '../entities/employee.entity';
 import { Role } from '../entities/role.entity';
-<<<<<<< Updated upstream
 import { writeAuditLog } from '../utils/write-audit-log';
-=======
-=======
-import { Employee, Role, User } from '../entities';
-import { writeAuditLog } from '../utils/write-audit-log';
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 export class UserRepository {
   private readonly repo: Repository<User>;
 

@@ -1,10 +1,5 @@
 import { EntityManager } from 'typeorm';
-<<<<<<< Updated upstream
 import { AuditLog } from '../entities/audit-log.entity';
-=======
-import { AuditLog } from '../entities';
->>>>>>> Stashed changes
-
 export interface AuditEntry {
   actorUserId: string;
   action: string;
