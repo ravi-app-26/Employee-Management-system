@@ -1,8 +1,21 @@
 import { z } from 'zod';
 // ...existing code...
+import { DEPARTMENT_SORT_FIELDS } from '../common/constants';
+import { Department } from '../entities/department.entity';
+import type { DepartmentDto } from '../interfaces';
 import { paginationShape, sortOrder } from './pagination.validator';
 
-export const DEPARTMENT_SORT_FIELDS = ['name', 'createdAt'] as const;
+export { DEPARTMENT_SORT_FIELDS } from '../common/constants';
+
+export function toDepartmentDto(department: Department): DepartmentDto {
+  return {
+    id: department.id,
+    name: department.name,
+    description: department.description,
+    createdAt: department.createdAt,
+    updatedAt: department.updatedAt,
+  };
+}
 
 export const listDepartmentsQuerySchema = z
   .object({
@@ -12,7 +25,6 @@ export const listDepartmentsQuerySchema = z
   })
   .strict();
 
-export type ListDepartmentsQuery = z.infer<typeof listDepartmentsQuerySchema>;
 // ...existing code...
 export const createDepartmentSchema = z
   .object({

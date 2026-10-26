@@ -1,13 +1,14 @@
 import { Request, Response } from 'express';
-import { EmployeeService } from '../services';
-import { ApiResponse } from '../utils/api-response';
+import { ROLE } from '../../common/constants';
+import { EmployeeService } from '../../services';
+import { ApiResponse } from '../../utils/api-response';
 import {
   createEmployeeSchema,
   listEmployeesQuerySchema,
   updateEmployeeSchema,
   updateOwnEmployeeProfileSchema,
   updateTeamMemberSchema,
-} from '../validators/employee.validator';
+} from '../../validators/employee.validator';
 
 export class EmployeeController {
   constructor(private readonly service: EmployeeService) {}
@@ -30,7 +31,7 @@ export class EmployeeController {
   };
 
   update = async (req: Request, res: Response) => {
-    const input = req.user!.role === 'manager'
+    const input = req.user!.role === ROLE.MANAGER
       ? updateTeamMemberSchema.parse(req.body)
       : updateEmployeeSchema.parse(req.body);
     ApiResponse.ok(

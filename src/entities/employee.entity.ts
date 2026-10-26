@@ -5,6 +5,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { EMPLOYMENT_STATUS } from '../common/constants';
 
 @Entity('employees')
 export class Employee {
@@ -26,7 +27,7 @@ export class Employee {
   @Column({ name: 'joining_date', type: 'date' })
   joiningDate!: string;
 
-  @Column({ name: 'employment_status', type: 'varchar', length: 20, default: 'active' })
+  @Column({ name: 'employment_status', type: 'varchar', length: 20, default: EMPLOYMENT_STATUS.ACTIVE })
   employmentStatus!: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

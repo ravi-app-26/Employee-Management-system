@@ -1,23 +1,11 @@
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { S3Client } from '@aws-sdk/client-s3';
-import { env } from '../config/env';
-import { ServiceUnavailableError } from '../errors/app-error';
+import { env } from '../../config/env';
+import { ServiceUnavailableError } from '../../errors/app-error';
 import { contentDispositionFilename } from './file-validation';
 import { s3Client } from './s3-client';
-
-export interface StoredObject {
-  key: string;
-  lastModified?: Date;
-}
-
-export interface DocumentObjectStorage {
-  put(key: string, body: Buffer, contentType: string): Promise<void>;
-  exists(key: string): Promise<boolean>;
-  presignDownload(key: string, filename: string, contentType: string): Promise<string>;
-  delete(key: string): Promise<void>;
-  list(prefix: string): Promise<StoredObject[]>;
-}
+import type { DocumentObjectStorage, StoredObject } from '../../interfaces';
 
 export class S3DocumentStorage implements DocumentObjectStorage {
   constructor(private readonly client: S3Client = s3Client) {}

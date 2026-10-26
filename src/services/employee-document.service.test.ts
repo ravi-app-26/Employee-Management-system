@@ -6,7 +6,8 @@ import { env } from '../config/env';
 import { AuditLog, Employee, EmployeeDocument, EmployeeDocumentStorage } from '../entities';
 import { BadRequestError, ConflictError, NotFoundError, ServiceUnavailableError } from '../errors/app-error';
 import { EmployeeDocumentService } from './employee-document.service';
-import { documentUpload, DocumentObjectStorage, S3DocumentStorage, StoredObject, sha256 } from '../storage';
+import { documentUpload, S3DocumentStorage, sha256 } from '../providers/aws';
+import type { DocumentObjectStorage, StoredObject } from '../interfaces';
 
 const employeeId = '5a92a7c2-61ac-4e03-8494-5eb119cd57f1';
 const actorId = 'd9428888-122b-4b20-9e2a-63e4c4a99b7e';

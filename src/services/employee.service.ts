@@ -1,27 +1,23 @@
 import { IsNull, Repository } from 'typeorm';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
+import { EMPLOYMENT_STATUS, ROLE } from '../common/constants';
 import { Department } from '../entities/department.entity';
 import { Employee } from '../entities/employee.entity';
 import { RefreshToken } from '../entities/refresh-token.entity';
 import { User } from '../entities/user.entity';
-import { EmployeeDto, toEmployeeDto } from '../dto/employee.dto';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/app-error';
 import { env } from '../config/env';
-import { EmployeeListFilters, EmployeeRepository } from '../repositories/employee.repository';
+import { EmployeeRepository } from '../repositories/employee.repository';
 import { UserRepository } from '../repositories/user.repository';
 import { writeAuditLog } from '../utils/write-audit-log';
+import type { EmployeeActor, EmployeeDto, EmployeeListFilters } from '../interfaces';
 import {
   CreateEmployeeInput,
   UpdateEmployeeInput,
   UpdateOwnEmployeeProfileInput,
+  toEmployeeDto,
 } from '../validators';
-
-export interface EmployeeActor {
-  id: string;
-  role: string;
-  employeeId: string;
-}
 
 export class EmployeeService {
   constructor(
@@ -67,7 +63,7 @@ export class EmployeeService {
       phone: input.phone ?? null,
       jobTitle: input.jobTitle,
       joiningDate: input.joiningDate,
-      roleName: 'employee',
+      roleName: ROLE.EMPLOYEE,
       audit: {
         actorUserId,
         action: 'employee.create',
@@ -91,7 +87,7 @@ export class EmployeeService {
     requestId: string,
   ): Promise<EmployeeDto> {
     const employee = await this.requireEmployee(id);
-    if (actor.role === 'manager' && employee.id === actor.employeeId) {
+    if (actor.role === ROLE.MANAGER && employee.id === actor.employeeId) {
       throw new ForbiddenError('Managers must update their own profile through /me');
     }
     this.ensureRecordAccess(employee, actor);
@@ -106,7 +102,7 @@ export class EmployeeService {
 
     const { firstName, lastName, workEmail, employmentStatus, ...employeeFields } = input;
     Object.assign(employee, employeeFields);
-    if (employmentStatus !== undefined && employmentStatus !== 'inactive') {
+    if (employmentStatus !== undefined && employmentStatus !== EMPLOYMENT_STATUS.INACTIVE) {
       employee.employmentStatus = employmentStatus;
     }
     await this.employees.manager.transaction(async (manager) => {
@@ -127,7 +123,7 @@ export class EmployeeService {
         requestId,
       });
     });
-    if (employmentStatus === 'inactive') {
+    if (employmentStatus === EMPLOYMENT_STATUS.INACTIVE) {
       await this.deactivate(id, actor, requestId);
       return this.withIdentity(await this.requireEmployee(id));
     }
@@ -139,7 +135,7 @@ export class EmployeeService {
     this.ensureRecordAccess(employee, actor);
 
     await this.employees.manager.transaction(async (manager) => {
-      employee.employmentStatus = 'inactive';
+      employee.employmentStatus = EMPLOYMENT_STATUS.INACTIVE;
       await manager.save(Employee, employee);
 
       const user = await manager.findOne(User, {
@@ -209,14 +205,14 @@ export class EmployeeService {
   }
 
   private ensureRecordAccess(employee: Employee, actor: EmployeeActor): void {
-    if (actor.role === 'admin' || actor.role === 'hr') return;
+    if (actor.role === ROLE.ADMIN || actor.role === ROLE.HR) return;
     if (
-      actor.role === 'manager' &&
+      actor.role === ROLE.MANAGER &&
       (employee.id === actor.employeeId || employee.managerId === actor.employeeId)
     ) {
       return;
     }
-    if (actor.role === 'employee' && employee.id === actor.employeeId) return;
+    if (actor.role === ROLE.EMPLOYEE && employee.id === actor.employeeId) return;
     throw new NotFoundError('Employee not found');
   }
 }

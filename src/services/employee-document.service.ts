@@ -1,17 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { DataSource, IsNull, Repository } from 'typeorm';
+import { ROLE } from '../common/constants';
 import { AuditLog, Employee, EmployeeDocument, EmployeeDocumentStorage } from '../entities';
 import { BadRequestError, ConflictError, NotFoundError } from '../errors/app-error';
 import { env } from '../config/env';
 import { logger } from '../config/logger';
-import { sanitizeOriginalFilename, sha256, S3DocumentStorage, validateDocumentContent } from '../storage';
-import type { DocumentObjectStorage } from '../storage';
-
-export interface DocumentActor {
-  id: string;
-  role: string;
-  employeeId: string;
-}
+import { sanitizeOriginalFilename, sha256, S3DocumentStorage, validateDocumentContent } from '../providers/aws';
+import type { DocumentActor, DocumentObjectStorage } from '../interfaces';
 
 export class EmployeeDocumentService {
   constructor(
@@ -213,8 +208,8 @@ export class EmployeeDocumentService {
   private async ensureEmployeeAccess(employeeId: string, actor: DocumentActor, write: boolean): Promise<void> {
     const employee = await this.employees.findOne({ where: { id: employeeId } });
     if (!employee) throw new NotFoundError('Employee not found');
-    if (actor.role === 'admin' || actor.role === 'hr' || actor.employeeId === employeeId) return;
-    if (!write && actor.role === 'manager' && employee.managerId === actor.employeeId) return;
+    if (actor.role === ROLE.ADMIN || actor.role === ROLE.HR || actor.employeeId === employeeId) return;
+    if (!write && actor.role === ROLE.MANAGER && employee.managerId === actor.employeeId) return;
     throw new NotFoundError('Employee not found');
   }
 

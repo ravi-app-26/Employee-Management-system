@@ -1,6 +1,6 @@
 import { DataSource, Repository } from 'typeorm';
+import { DEPARTMENT_SORT_FIELDS } from '../common/constants';
 import { Department } from '../entities/department.entity';
-import { DEPARTMENT_SORT_FIELDS } from '../validators/department.validator';
 type DepartmentSortField = (typeof DEPARTMENT_SORT_FIELDS)[number];
 
 const DEPARTMENT_SORT_COLUMNS: Record<DepartmentSortField, keyof Department> = {

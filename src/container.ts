@@ -14,7 +14,7 @@ import {
   EmployeeController,
   EmployeeDocumentController,
   UserController,
-} from './controllers';
+} from './controllers/v1';
 import { AuthenticationMiddleware } from './middlewares';
 import { DepartmentRepository } from './repositories';
 import { Department } from './entities/department.entity';

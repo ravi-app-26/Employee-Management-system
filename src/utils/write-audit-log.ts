@@ -1,12 +1,6 @@
 import { EntityManager } from 'typeorm';
 import { AuditLog } from '../entities/audit-log.entity';
-export interface AuditEntry {
-  actorUserId: string;
-  action: string;
-  resourceType: string;
-  resourceId: string;
-  requestId: string;
-}
+import type { AuditEntry } from '../interfaces';
 
 export function writeAuditLog(manager: EntityManager, entry: AuditEntry): Promise<unknown> {
   return manager.insert(AuditLog, {

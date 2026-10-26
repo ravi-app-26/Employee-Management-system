@@ -1,5 +1,6 @@
 import { RequestHandler, Router } from 'express';
-import { UserController } from '../controllers/user.controller';
+import { ROLE } from '../common/constants';
+import { UserController } from '../controllers/v1/user.controller';
 import { AuthorizationMiddleware } from '../middlewares/authorize';
 import { RequestValidationMiddleware } from '../middlewares/validate-request';
 import { AuthorizationService } from '../services/authorization.service';
@@ -15,7 +16,7 @@ export class UserRoutes {
 
     router.patch(
       '/users/:id/role',
-      AuthorizationMiddleware.requireRole('admin'),
+      AuthorizationMiddleware.requireRole(ROLE.ADMIN),
       AuthorizationMiddleware.requirePermission(authz, 'user:assign_role'),
       RequestValidationMiddleware.uuidParam('id'),
       RequestValidationMiddleware.body(assignRoleSchema),

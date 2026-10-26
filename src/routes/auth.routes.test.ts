@@ -2,7 +2,7 @@ import cookieParser from 'cookie-parser';
 import express, { RequestHandler } from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { AuthController } from '../controllers';
+import { AuthController } from '../controllers/v1';
 import { ErrorHandlerMiddleware } from '../middlewares';
 import { UnauthorizedError } from '../errors/app-error';
 import { AuthService, AuthorizationService } from '../services';
@@ -85,6 +85,15 @@ describe('auth routes', () => {
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe('UNAUTHORIZED');
     expect(service.refresh).not.toHaveBeenCalled();
+  });
+
+  it('rejects logout requests when the request is unauthenticated', async () => {
+    isAuthenticated = false;
+    const response = await request(app).post('/api/v1/auth/logout');
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('UNAUTHORIZED');
+    expect(service.logout).not.toHaveBeenCalled();
   });
 
   it('rejects protected routes when the request is unauthenticated', async () => {

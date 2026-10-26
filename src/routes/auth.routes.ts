@@ -1,5 +1,6 @@
 import { Router, RequestHandler } from 'express';
-import { AuthController } from '../controllers/auth.controller';
+import { ROLE } from '../common/constants';
+import { AuthController } from '../controllers/v1/auth.controller';
 import { RequestValidationMiddleware } from '../middlewares/validate-request';
 import { AuthorizationMiddleware } from '../middlewares/authorize';
 import { AuthorizationService } from '../services/authorization.service';
@@ -19,13 +20,13 @@ export class AuthRoutes {
   router.post(
     '/register',
     authenticate,
-    AuthorizationMiddleware.requireRole('admin', 'hr'),
+    AuthorizationMiddleware.requireRole(ROLE.ADMIN, ROLE.HR),
     RequestValidationMiddleware.body(registerSchema),
     ctrl.register,
   );
   router.post('/login', RateLimitMiddleware.auth, RequestValidationMiddleware.body(loginSchema), ctrl.login);
   router.post('/refresh', RateLimitMiddleware.auth, ctrl.refresh);
-  router.post('/logout', ctrl.logout);
+  router.post('/logout', authenticate, ctrl.logout);
   router.post('/logout-all', authenticate, ctrl.logoutAll);
   router.get('/sessions', authenticate, ctrl.sessions);
   router.delete(
@@ -46,7 +47,7 @@ export class AuthRoutes {
   router.get('/me', authenticate, ctrl.me);
 
   // Sirf admin
-  router.get('/admin-only', authenticate, AuthorizationMiddleware.requireRole('admin'), ctrl.me);
+  router.get('/admin-only', authenticate, AuthorizationMiddleware.requireRole(ROLE.ADMIN), ctrl.me);
 
   // Permission wala check (admin aur hr ke paas employee:create hai)
   router.get(

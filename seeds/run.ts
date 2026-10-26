@@ -1,6 +1,7 @@
 import { Pool, PoolClient } from 'pg';
 import bcrypt from 'bcrypt';
 import { env } from '../src/config/env';
+import type { DevUser } from '../src/interfaces';
 
 const DEV_PASSWORD = 'DevPass#12345';
 
@@ -36,7 +37,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   admin: PERMISSIONS.map(([name]) => name),
   hr: ['employee:create', 'employee:read', 'employee:update', 'department:read', 'document:upload', 'document:read', 'document:delete', ...OWN],
   manager: ['employee:read', 'employee:update', 'department:read', 'document:read', ...OWN],
-  employee: ['department:read', 'document:upload', 'document:read', 'document:delete', ...OWN],
+  employee: ['department:read', 'document:upload', 'document:read',   'document:delete', ...OWN],
 };
 
 const DEPARTMENTS: [string, string][] = [
@@ -44,16 +45,6 @@ const DEPARTMENTS: [string, string][] = [
   ['Human Resources', 'People operations'],
   ['Sales', 'Sales and accounts'],
 ];
-
-interface DevUser {
-  email: string;
-  first: string;
-  last: string;
-  title: string;
-  dept: string;
-  role: string;
-  managerEmail?: string;
-}
 
 // Manager pehle aana chahiye, kyunki employee uske under report karta hai
 const DEV_USERS: DevUser[] = [

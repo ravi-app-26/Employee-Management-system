@@ -2,15 +2,7 @@ import bcrypt from 'bcrypt';
 import request from 'supertest';
 import { AppDataSource } from '../../src/config/database';
 import { app } from '../../src/app';
-
-export interface AuthenticatedTestUser {
-  id: string;
-  employeeId: string;
-  email: string;
-  password: string;
-  accessToken: string;
-  refreshCookie: string;
-}
+import type { AuthenticatedTestUser } from '../../src/interfaces';
 
 export async function createUserByRole(
   role: string,

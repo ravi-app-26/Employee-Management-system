@@ -1,6 +1,6 @@
 import { RequestHandler, Router } from 'express';
-import { EmployeeDocumentController } from '../controllers';
-import { documentUpload } from '../storage';
+import { EmployeeDocumentController } from '../controllers/v1';
+import { documentUpload } from '../providers/aws';
 import { RequestValidationMiddleware } from '../middlewares';
 import { AuthorizationMiddleware } from '../middlewares';
 import { AuthorizationService } from '../services';

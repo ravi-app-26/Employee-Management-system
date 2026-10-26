@@ -1,5 +1,6 @@
 import { RequestHandler, Router } from 'express';
-import { EmployeeController } from '../controllers';
+import { ROLE } from '../common/constants';
+import { EmployeeController } from '../controllers/v1';
 import { AuthorizationMiddleware, RequestValidationMiddleware } from '../middlewares';
 import { AuthorizationService } from '../services';
 
@@ -14,7 +15,7 @@ export class EmployeeRoutes {
 
   router.post(
     '/',
-    AuthorizationMiddleware.requireRole('admin', 'hr'),
+    AuthorizationMiddleware.requireRole(ROLE.ADMIN, ROLE.HR),
     AuthorizationMiddleware.requirePermission(authz, 'employee:create'),
     ctrl.create,
   );

@@ -3,7 +3,7 @@ import { AppDataSource } from '../../src/config/database';
 import { Employee, EmployeeDocument, EmployeeDocumentStorage } from '../../src/entities';
 import { ConflictError } from '../../src/errors/app-error';
 import { EmployeeDocumentService } from '../../src/services/employee-document.service';
-import type { DocumentObjectStorage } from '../../src/storage';
+import type { DocumentObjectStorage } from '../../src/interfaces';
 import { createUserByRole } from './helpers';
 
 const pdf = Buffer.from('%PDF-1.7 concurrent upload test');

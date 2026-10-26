@@ -1,8 +1,9 @@
 import { z } from 'zod';
+import { USER_ROLES } from '../common/constants';
 
 export const assignRoleSchema = z
   .object({
-    role: z.enum(['admin', 'hr', 'manager', 'employee']),
+    role: z.enum(USER_ROLES),
   })
   .strict();
 
