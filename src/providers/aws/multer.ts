@@ -1,6 +1,6 @@
 import multer from 'multer';
-import { BadRequestError } from '../errors/app-error';
-import { env } from '../config/env';
+import { BadRequestError } from '../../errors/app-error';
+import { env } from '../../config/env';
 import { getValidatedExtension } from './file-validation';
 
 export const documentUpload = multer({

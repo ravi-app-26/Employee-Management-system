@@ -1,22 +1,11 @@
-import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { S3Client } from '@aws-sdk/client-s3';
-import { env } from '../config/env';
-import { ServiceUnavailableError } from '../errors/app-error';
+import { env } from '../../config/env';
+import { ServiceUnavailableError } from '../../errors/app-error';
 import { contentDispositionFilename } from './file-validation';
 import { s3Client } from './s3-client';
-
-export interface StoredObject {
-  key: string;
-  lastModified?: Date;
-}
-
-export interface DocumentObjectStorage {
-  put(key: string, body: Buffer, contentType: string): Promise<void>;
-  presignDownload(key: string, filename: string, contentType: string): Promise<string>;
-  delete(key: string): Promise<void>;
-  list(prefix: string): Promise<StoredObject[]>;
-}
+import type { DocumentObjectStorage, StoredObject } from '../../interfaces';
 
 export class S3DocumentStorage implements DocumentObjectStorage {
   constructor(private readonly client: S3Client = s3Client) {}
@@ -31,6 +20,22 @@ export class S3DocumentStorage implements DocumentObjectStorage {
         ServerSideEncryption: 'AES256',
       }));
     } catch {
+      throw new ServiceUnavailableError('Document storage is temporarily unavailable');
+    }
+  }
+
+  async exists(key: string): Promise<boolean> {
+    try {
+      await this.client.send(new HeadObjectCommand({
+        Bucket: env.DOCUMENTS_S3_BUCKET,
+        Key: key,
+      }));
+      return true;
+    } catch (error) {
+      const s3Error = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+      if (s3Error.name === 'NotFound' || s3Error.name === 'NoSuchKey' || s3Error.$metadata?.httpStatusCode === 404) {
+        return false;
+      }
       throw new ServiceUnavailableError('Document storage is temporarily unavailable');
     }
   }

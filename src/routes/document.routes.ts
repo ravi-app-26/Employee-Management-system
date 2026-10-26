@@ -1,5 +1,5 @@
 import { RequestHandler, Router } from 'express';
-import { EmployeeDocumentController } from '../controllers';
+import { EmployeeDocumentController } from '../controllers/v1';
 import { AuthorizationMiddleware } from '../middlewares';
 import { AuthorizationService } from '../services';
 import { RequestValidationMiddleware } from '../middlewares';

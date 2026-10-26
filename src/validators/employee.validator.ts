@@ -1,15 +1,30 @@
 import { z } from 'zod';
+import { EMPLOYEE_SORT_FIELDS, EMPLOYMENT_STATUSES } from '../common/constants';
+import { Employee } from '../entities/employee.entity';
+import type { EmployeeDto } from '../interfaces';
 import { paginationShape, sortOrder } from './pagination.validator';
 
-export const EMPLOYMENT_STATUSES = ['active', 'inactive', 'on_leave'] as const;
+export { EMPLOYEE_SORT_FIELDS, EMPLOYMENT_STATUSES } from '../common/constants';
 
-export const EMPLOYEE_SORT_FIELDS = [
-  'firstName',
-  'lastName',
-  'workEmail',
-  'joiningDate',
-  'createdAt',
-] as const;
+export function toEmployeeDto(
+  employee: Employee,
+  identity: { firstName: string | null; lastName: string | null; workEmail: string | null },
+): EmployeeDto {
+  return {
+    id: employee.id,
+    firstName: identity.firstName,
+    lastName: identity.lastName,
+    workEmail: identity.workEmail,
+    phone: employee.phone,
+    departmentId: employee.departmentId,
+    managerId: employee.managerId,
+    jobTitle: employee.jobTitle,
+    joiningDate: employee.joiningDate,
+    employmentStatus: employee.employmentStatus,
+    createdAt: employee.createdAt,
+    updatedAt: employee.updatedAt,
+  };
+}
 
 const isoDate = z
   .string()

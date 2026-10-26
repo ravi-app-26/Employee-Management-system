@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { BadRequestError } from '../errors/app-error';
+import { BadRequestError } from '../../errors/app-error';
 
 const allowedTypes: Record<string, { extensions: string[]; validatedExtension: string; signature: (file: Buffer) => boolean }> = {
   'application/pdf': {

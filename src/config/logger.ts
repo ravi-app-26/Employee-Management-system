@@ -1,4 +1,5 @@
 import pino, { LoggerOptions } from 'pino';
+import { REFRESH_COOKIE_NAME } from '../common/constants';
 
 export const loggerOptions: LoggerOptions = {
   redact: {
@@ -16,8 +17,8 @@ export const loggerOptions: LoggerOptions = {
       'req.headers.authorization',
       'request.headers.authorization',
       'cookie',
-      'cookies.refresh_token',
-      'req.cookies.refresh_token',
+      `cookies.${REFRESH_COOKIE_NAME}`,
+      `req.cookies.${REFRESH_COOKIE_NAME}`,
       'body.password',
       'body.currentPassword',
       'body.newPassword',

@@ -1,6 +1,6 @@
 import { NextFunction, RequestHandler } from 'express';
-import { AppDataSource } from '../config/database';
-import { ServiceUnavailableError } from '../errors/app-error';
+import { AppDataSource } from '../../config/database';
+import { ServiceUnavailableError } from '../../errors/app-error';
 
 export class HealthController {
   static handle: RequestHandler = (_req, res) => {

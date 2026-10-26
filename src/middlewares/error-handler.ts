@@ -1,7 +1,7 @@
 import { ErrorRequestHandler, RequestHandler } from 'express';
 import { ZodError } from 'zod';
 import { AppError, NotFoundError } from '../errors/app-error';
-import { MulterError } from '../storage';
+import { MulterError } from '../providers/aws';
 import { env } from '../config/env';
 import { logger } from '../config/logger';
 

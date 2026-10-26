@@ -1,6 +1,7 @@
 import { Repository } from 'typeorm';
 import { Employee, User } from '../entities';
-import { EMPLOYEE_SORT_FIELDS } from '../validators';
+import { EMPLOYEE_SORT_FIELDS, ROLE } from '../common/constants';
+import type { EmployeeListFilters } from '../interfaces';
 
 type SortField = (typeof EMPLOYEE_SORT_FIELDS)[number];
 
@@ -17,17 +18,6 @@ const SORT_COLUMNS: Record<SortField, string> = {
   joiningDate: 'e.joiningDate',
   createdAt: 'e.createdAt',
 };
-
-export interface EmployeeListFilters {
-  page: number;
-  limit: number;
-  departmentId?: string;
-  status?: string;
-  search?: string;
-  sortBy: SortField;
-  order: 'asc' | 'desc';
-  scope?: { role: string; employeeId: string };
-}
 
 export class EmployeeRepository {
   private static escapeLike(value: string): string {
@@ -48,11 +38,11 @@ export class EmployeeRepository {
     .addSelect('u.last_name', 'user_last_name')
     .addSelect('u.work_email', 'user_work_email');
 
-  if (filters.scope?.role === 'manager') {
+  if (filters.scope?.role === ROLE.MANAGER) {
     query.andWhere('(e.managerId = :scopeEmployeeId OR e.id = :scopeEmployeeId)', {
       scopeEmployeeId: filters.scope.employeeId,
     });
-  } else if (filters.scope && !['admin', 'hr'].includes(filters.scope.role)) {
+  } else if (filters.scope && filters.scope.role !== ROLE.ADMIN && filters.scope.role !== ROLE.HR) {
     query.andWhere('e.id = :scopeEmployeeId', {
       scopeEmployeeId: filters.scope.employeeId,
     });

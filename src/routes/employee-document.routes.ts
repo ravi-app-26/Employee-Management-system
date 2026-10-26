@@ -1,6 +1,6 @@
 import { RequestHandler, Router } from 'express';
-import { EmployeeDocumentController } from '../controllers';
-import { documentUpload } from '../storage';
+import { EmployeeDocumentController } from '../controllers/v1';
+import { documentUpload } from '../providers/aws';
 import { RequestValidationMiddleware } from '../middlewares';
 import { AuthorizationMiddleware } from '../middlewares';
 import { AuthorizationService } from '../services';
@@ -11,10 +11,10 @@ export class EmployeeDocumentRoutes {
     router.use(authenticate);
     router.post(
       '/:id/documents',
-      RequestValidationMiddleware.uuidParam('id'),
+      RequestValidationMiddleware.uuidParam('id'),//check uuid param ie valid or not 
       AuthorizationMiddleware.requirePermission(authz, 'document:upload'),
       controller.authorizeUpload,
-      documentUpload.single('file'),
+      documentUpload.single('file'),//multer middleware to handle file upload
       controller.upload,
     );
     router.get(

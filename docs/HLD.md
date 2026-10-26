@@ -3,8 +3,6 @@
 ## Scope
 
 The service is a single Express 5 API process backed by PostgreSQL. It manages authentication, employee and department records, role/permission checks, refresh-token sessions, audit events, and employee document metadata plus private local files. It does not implement a frontend, cloud object-storage integration, audit-log query endpoint, employee data-erasure workflow, or full GDPR program.
-
-
 ## Runtime Components
 
 ```mermaid
@@ -18,8 +16,7 @@ flowchart LR
   Service --> Repo[TypeORM repositories / transaction manager]
   Repo --> PG[(PostgreSQL)]
   Service --> Files[Private local upload directory]
-
-  Service --> Audit[(audit_logs in PostgreSQL)]
+Service --> Audit[(audit_logs in PostgreSQL)]
   Express --> Swagger[Swagger UI / OpenAPI]
   Express --> Logger[Pino redacting logger]
 ```
@@ -39,7 +36,6 @@ flowchart LR
 - Refresh tokens are high-entropy random values delivered in an HttpOnly cookie. The database stores SHA-256 hashes and a family ID.
 - Employee document uploads are accepted by Multer into a private local directory, then extension, MIME type, size, and file signature are checked. Generated object keys prevent clients choosing filesystem paths.
 - Document download uses a five-minute HMAC-signed URL served by this API; the file directory is not mounted as a public static path.
-
 - The process trusts proxy headers only according to `TRUST_PROXY`. Configure it to match the actual trusted reverse-proxy topology.
 
 ## Availability And Operations
@@ -49,7 +45,6 @@ Database startup retries are limited to initialization; API writes are not autom
 ## Known Boundaries
 
 - Local file storage is single-host storage; multi-instance deployments need a shared private volume or a separately implemented object-storage adapter.
-
 - Audit events can be written, but there is no audit search/read route or audit retention process.
 - Seeded `audit:read` and `profile:export_own` permission names do not imply that an audit-read route exists. Profile export does exist.
 - Technical controls do not establish GDPR compliance; lawful basis, transparency notices, retention policy approval, and rights handling require organizational decisions.

@@ -7,7 +7,7 @@ import { ErrorHandlerMiddleware, RateLimitMiddleware, RequestIdMiddleware } from
 import { AuthRoutes } from './routes/auth.routes';
 import { DepartmentRoutes } from './routes/department.routes';
 import { EmployeeRoutes } from './routes/employee.routes';
-import { HealthController } from './controllers';
+import { HealthController } from './controllers/v1';
 import { EmployeeDocumentRoutes } from './routes/employee-document.routes';
 import { DocumentRoutes } from './routes/document.routes';
 import { UserRoutes } from './routes/user.routes';
@@ -38,7 +38,7 @@ app.get('/health', HealthController.handle);
 app.get('/health/live', HealthController.live);
 app.get('/health/ready', HealthController.ready);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-app.use(
+app.use(  
   '/api/v1/auth',
   AuthRoutes.create(authController, authenticateMiddleware, authorizationService),
 );

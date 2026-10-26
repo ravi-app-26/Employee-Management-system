@@ -1,5 +1,4 @@
 export { AuthService } from './auth.service';
-export type { AccessPayload, TokenPair } from './auth.service';
 export { AuthorizationService } from './authorization.service';
 export { DepartmentService } from './department.service';
 export { EmployeeDocumentService } from './employee-document.service';

@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
-import { EmployeeDocumentService } from '../services';
-import { ApiResponse } from '../utils/api-response';
+import { EmployeeDocumentService } from '../../services';
+import { ApiResponse } from '../../utils/api-response';
 
 export class EmployeeDocumentController {
     authorizeUpload = async (req: Request, _res: Response, next: NextFunction) => {

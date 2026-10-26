@@ -1,8 +1,6 @@
 import { DataSource, Repository } from 'typeorm';
+import { DEPARTMENT_SORT_FIELDS } from '../common/constants';
 import { Department } from '../entities/department.entity';
-import { DEPARTMENT_SORT_FIELDS } from '../validators/department.validator';
-
-
 type DepartmentSortField = (typeof DEPARTMENT_SORT_FIELDS)[number];
 
 const DEPARTMENT_SORT_COLUMNS: Record<DepartmentSortField, keyof Department> = {
@@ -23,7 +21,6 @@ export class DepartmentRepository {
     );
   }
 
-  // ...existing code...
   async findAll(
     page: number,
     limit: number,
@@ -46,7 +43,6 @@ export class DepartmentRepository {
       },
     };
   }
-// ...existing code...
 
   findById(id: string): Promise<Department | null> {
     return this.repo.findOne({ where: { id } });

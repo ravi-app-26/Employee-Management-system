@@ -1,9 +1,7 @@
 import { Request, Response } from 'express';
-import { UserService } from '../services/user.service';
-import { ApiResponse } from '../utils/api-response';
-import { assignRoleSchema } from '../validators/user.validator';
-
-
+import { UserService } from '../../services/user.service';
+import { ApiResponse } from '../../utils/api-response';
+import { assignRoleSchema } from '../../validators/user.validator';
 export class UserController {
   constructor(private readonly service: UserService) {}
 

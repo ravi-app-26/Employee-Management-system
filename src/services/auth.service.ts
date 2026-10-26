@@ -1,25 +1,18 @@
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
 import { createHash, randomBytes, randomUUID } from 'crypto';
+import { ROLE } from '../common/constants';
 import { env } from '../config/env';
 import { BadRequestError, NotFoundError, UnauthorizedError } from '../errors/app-error';
 import { RefreshTokenRepository, UserRepository } from '../repositories';
-
-export interface TokenPair {
-  accessToken: string;
-  refreshToken: string;
-}
-
-export interface AccessPayload {
-  sub: string;
-  role: string;
-  employeeId: string;
-}
+import { JwtProvider } from '../providers/jwt';
+import type { AccessPayload, TokenPair } from '../interfaces';
 
 // User na mile tab bhi bcrypt chalane ke liye (timing attack se bachav)
 const DUMMY_HASH = bcrypt.hashSync('dummy-password-not-used', env.BCRYPT_ROUNDS);
 
 export class AuthService {
+  private readonly jwtProvider = new JwtProvider();
+
   constructor(
     private readonly users: UserRepository,
     private readonly refreshTokens: RefreshTokenRepository,
@@ -32,13 +25,7 @@ export class AuthService {
   }
 
   private signAccessToken(payload: AccessPayload): string {
-    return jwt.sign({ role: payload.role, employeeId: payload.employeeId }, env.JWT_ACCESS_SECRET, {
-      subject: payload.sub,
-      expiresIn: env.JWT_ACCESS_TTL as jwt.SignOptions['expiresIn'],
-      issuer: env.JWT_ISSUER,
-      audience: env.JWT_AUDIENCE,
-      algorithm: 'HS256',
-    });
+    return this.jwtProvider.signAccessToken(payload);
   }
 
   private async issueRefreshToken(userId: string, familyId: string): Promise<string> {
@@ -56,21 +43,7 @@ export class AuthService {
 
   // Middleware bhi ise use karega
   verifyAccessToken(token: string): AccessPayload {
-    try {
-      const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET, {
-        issuer: env.JWT_ISSUER,
-        audience: env.JWT_AUDIENCE,
-        algorithms: ['HS256'],
-      }) as jwt.JwtPayload;
-
-      return {
-        sub: String(decoded.sub),
-        role: String(decoded.role),
-        employeeId: String(decoded.employeeId),
-      };
-    } catch {
-      throw new UnauthorizedError('Invalid or expired token');
-    }
+    return this.jwtProvider.verifyAccessToken(token);
   }
 
   isActive(userId: string): Promise<boolean> {
@@ -205,7 +178,7 @@ export class AuthService {
       departmentId: input.departmentId,
       jobTitle: input.jobTitle,
       passwordHash,
-      roleName: 'employee',
+      roleName: ROLE.EMPLOYEE,
       audit: {
         actorUserId,
         action: 'employee.create',

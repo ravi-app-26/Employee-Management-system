@@ -3,7 +3,6 @@ import { User } from '../entities/user.entity';
 import { Employee } from '../entities/employee.entity';
 import { Role } from '../entities/role.entity';
 import { writeAuditLog } from '../utils/write-audit-log';
-
 export class UserRepository {
   private readonly repo: Repository<User>;
 

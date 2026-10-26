@@ -4,10 +4,9 @@ import { Employee } from '../entities/employee.entity';
 import { RefreshToken } from '../entities/refresh-token.entity';
 import { Role } from '../entities/role.entity';
 import { User } from '../entities/user.entity';
-
-import { toEmployeeDto } from '../dto/employee.dto';
 import { NotFoundError } from '../errors/app-error';
 import { writeAuditLog } from '../utils/write-audit-log';
+import { toEmployeeDto } from '../validators';
 
 export class UserService {
   constructor(private readonly dataSource: DataSource) {}

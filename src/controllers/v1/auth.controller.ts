@@ -1,10 +1,9 @@
 import { CookieOptions, Request, Response } from 'express';
-import { env } from '../config/env';
-import { UnauthorizedError } from '../errors/app-error';
-import { AuthService } from '../services';
-import { ApiResponse } from '../utils/api-response';
-
-const REFRESH_COOKIE = 'refresh_token';
+import { REFRESH_COOKIE_NAME } from '../../common/constants';
+import { env } from '../../config/env';
+import { UnauthorizedError } from '../../errors/app-error';
+import { AuthService } from '../../services';
+import { ApiResponse } from '../../utils/api-response';
 
 const cookieOptions: CookieOptions = {
   httpOnly: true,
@@ -28,24 +27,24 @@ export class AuthController {
     const { email, password } = req.body;
     const tokens = await this.service.login(email, password);
 
-    res.cookie(REFRESH_COOKIE, tokens.refreshToken, cookieOptions);
+    res.cookie(REFRESH_COOKIE_NAME, tokens.refreshToken, cookieOptions);
     ApiResponse.ok(res, { accessToken: tokens.accessToken });
   };
 
   refresh = async (req: Request, res: Response) => {
-    const raw = req.cookies?.[REFRESH_COOKIE];
+    const raw = req.cookies?.[REFRESH_COOKIE_NAME];
     if (!raw) throw new UnauthorizedError('Invalid refresh token');
 
     const tokens = await this.service.refresh(raw);
 
-    res.cookie(REFRESH_COOKIE, tokens.refreshToken, cookieOptions);
+    res.cookie(REFRESH_COOKIE_NAME, tokens.refreshToken, cookieOptions);
     ApiResponse.ok(res, { accessToken: tokens.accessToken });
   };
 
   logout = async (req: Request, res: Response) => {
-    await this.service.logout(req.cookies?.[REFRESH_COOKIE]);
+    await this.service.logout(req.cookies?.[REFRESH_COOKIE_NAME]);
 
-    res.clearCookie(REFRESH_COOKIE, clearCookieOptions);
+    res.clearCookie(REFRESH_COOKIE_NAME, clearCookieOptions);
     ApiResponse.noContent(res);
   };
 
@@ -56,7 +55,7 @@ export class AuthController {
   sessions = async (req: Request, res: Response) => {
     const data = await this.service.listSessions(
       req.user!.id,
-      req.cookies?.[REFRESH_COOKIE],
+      req.cookies?.[REFRESH_COOKIE_NAME],
     );
     ApiResponse.ok(res, data);
   };
@@ -69,7 +68,7 @@ export class AuthController {
   logoutAll = async (req: Request, res: Response) => {
     await this.service.logoutAll(req.user!.id);
 
-    res.clearCookie(REFRESH_COOKIE, clearCookieOptions);
+    res.clearCookie(REFRESH_COOKIE_NAME, clearCookieOptions);
     ApiResponse.noContent(res);
   };
 
@@ -77,7 +76,7 @@ export class AuthController {
     const { currentPassword, newPassword } = req.body;
     await this.service.changePassword(req.user!.id, currentPassword, newPassword);
 
-    res.clearCookie(REFRESH_COOKIE, clearCookieOptions);
+    res.clearCookie(REFRESH_COOKIE_NAME, clearCookieOptions);
     ApiResponse.noContent(res);
   };
 }

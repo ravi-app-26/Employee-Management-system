@@ -16,7 +16,6 @@ This inventory describes fields present in current code/schema. Retention period
 | Audit actor/action/resource/request ID/time | `audit_logs` | Accountability for role, session, profile, employee, and document actions | Written by service transactions; no audit read API | No retention or purge job configured. Organization must define a schedule. |
 | Document original filename, MIME, size, owner/uploader, dates | `employee_documents` | Document listing/download authorization and operations | Admin/HR, employee owner, manager read scope according to document route/service | Metadata soft-deleted; purged with file after `UPLOAD_RETENTION_DAYS` (default 30) by startup cleanup. |
 | Document bytes and generated filename | Local `UPLOAD_DIR` file | Store private uploaded content | Only API file/download path; no static public route | Soft-delete cleanup after configured days; unreferenced files older than 24h removed at startup. Backup/restore of file directory and DB must be coordinated. |
-
 | IP/request metadata | Express/rate-limit processing and request ID | Rate limiting, diagnostics, request correlation | Middleware/server logs | No dedicated request-log retention policy is defined here. Avoid adding raw credentials or full PII to logs. |
 
 ## Privacy Notes

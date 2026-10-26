@@ -49,4 +49,3 @@ Zod schemas are strict for request bodies and list query strings. Sorting is an 
 ## Document Flow
 
 Multer allows one file with a configured size cap and matching PDF/PNG/JPEG extension/MIME. File bytes are written to `UPLOAD_DIR` under a server-generated name. Content signatures are checked before metadata insert. Metadata insertion and upload audit are transactional; on failure the new file is unlinked. Deletion is soft and startup cleanup removes expired soft-deleted files and orphaned files older than 24 hours.
-

@@ -1,6 +1,6 @@
 # Entity Relationship Diagram
 
-This diagram reflects the current PostgreSQL migrations. Names and work email are in `users`, not `employees`. Document bytes are stored on local disk; only metadata is in `employee_documents`.
+This diagram reflects the current PostgreSQL migrations. Names and work email are in `users`, not `employees`. Document bytes are stored in private S3; only metadata and the object key are in `employee_documents`.
 
 ```mermaid
 erDiagram

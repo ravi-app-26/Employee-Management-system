@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
-import { DepartmentService } from '../services';
-import { ApiResponse } from '../utils/api-response';
-import { listDepartmentsQuerySchema } from '../validators';
+import { DepartmentService } from '../../services';
+import { ApiResponse } from '../../utils/api-response';
+import { listDepartmentsQuerySchema } from '../../validators';
 
 export class DepartmentController {
   constructor(private readonly service: DepartmentService) {}

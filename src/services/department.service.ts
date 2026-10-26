@@ -1,11 +1,10 @@
 import { NotFoundError } from '../errors/app-error';
 import { Department } from '../entities/department.entity';
 import { DepartmentRepository } from '../repositories/department.repository';
-import { DepartmentDto, toDepartmentDto } from '../dto/department.dto';
-import { DEPARTMENT_SORT_FIELDS } from '../validators/department.validator';
+import type { DepartmentDto } from '../interfaces';
+import { DEPARTMENT_SORT_FIELDS, toDepartmentDto } from '../validators/department.validator';
 
 type DepartmentSortField = (typeof DEPARTMENT_SORT_FIELDS)[number];
-
 
 export class DepartmentService {
   constructor(private readonly repo: DepartmentRepository) {}
