@@ -1,4 +1,4 @@
-import { IsNull, Repository } from 'typeorm';
+import { IsNull, MoreThan, Repository } from 'typeorm';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
 import { EMPLOYMENT_STATUS, ROLE } from '../common/constants';
@@ -9,8 +9,10 @@ import { User } from '../entities/user.entity';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/app-error';
 import { env } from '../config/env';
 import { EmployeeRepository } from '../repositories/employee.repository';
+import { RefreshTokenRepository } from '../repositories/refresh-token.repository';
 import { UserRepository } from '../repositories/user.repository';
 import { writeAuditLog } from '../utils/write-audit-log';
+import { insertSessionAuditEvent } from '../utils/session-audit';
 import type { EmployeeActor, EmployeeDto, EmployeeListFilters } from '../interfaces';
 import {
   CreateEmployeeInput,
@@ -25,6 +27,7 @@ export class EmployeeService {
     private readonly departments: Repository<Department>,
     private readonly users: Repository<User>,
     private readonly userRepository: UserRepository,
+    private readonly refreshTokens: RefreshTokenRepository,
   ) {}
 
   async list(filters: EmployeeListFilters, actor: EmployeeActor) {
@@ -133,6 +136,7 @@ export class EmployeeService {
   async deactivate(id: string, actor: EmployeeActor, requestId: string): Promise<void> {
     const employee = await this.requireEmployee(id);
     this.ensureRecordAccess(employee, actor);
+    let revokedUserId: string | undefined;
 
     await this.employees.manager.transaction(async (manager) => {
       employee.employmentStatus = EMPLOYMENT_STATUS.INACTIVE;
@@ -143,12 +147,26 @@ export class EmployeeService {
         select: { id: true },
       });
       if (user) {
+        revokedUserId = user.id;
+        const activeSessions = await manager.find(RefreshToken, {
+          select: { id: true, familyId: true },
+          where: { userId: user.id, revokedAt: IsNull(), expiresAt: MoreThan(new Date()) },
+        });
         await manager.update(User, { id: user.id }, { isActive: false });
         await manager.update(
           RefreshToken,
           { userId: user.id, revokedAt: IsNull() },
           { revokedAt: new Date() },
         );
+        for (const session of activeSessions) {
+          await insertSessionAuditEvent(manager, {
+            eventKey: `SESSION_REVOKED:${session.familyId}`,
+            userId: user.id,
+            sessionId: session.familyId,
+            eventType: 'SESSION_REVOKED',
+            correlationId: requestId,
+          });
+        }
       }
       await writeAuditLog(manager, {
         actorUserId: actor.id,
@@ -158,6 +176,7 @@ export class EmployeeService {
         requestId,
       });
     });
+    if (revokedUserId) await this.refreshTokens.invalidateUserCache(revokedUserId);
   }
 
   async getOwnProfile(actor: EmployeeActor): Promise<EmployeeDto> {

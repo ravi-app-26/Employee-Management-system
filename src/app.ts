@@ -11,6 +11,7 @@ import { HealthController } from './controllers/v1';
 import { EmployeeDocumentRoutes } from './routes/employee-document.routes';
 import { DocumentRoutes } from './routes/document.routes';
 import { UserRoutes } from './routes/user.routes';
+import { SessionAuditRoutes } from './routes/session-audit.routes';
 import { env } from './config/env';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
@@ -22,6 +23,7 @@ import {
   employeeController,
   employeeDocumentController,
   userController,
+  sessionAuditController,
 } from './container';
 
 export const app = express();
@@ -37,12 +39,14 @@ app.use(cookieParser());
 app.get('/health', HealthController.handle);
 app.get('/health/live', HealthController.live);
 app.get('/health/ready', HealthController.ready);
+app.get('/health/metrics', HealthController.metrics);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use(  
   '/api/v1/auth',
   AuthRoutes.create(authController, authenticateMiddleware, authorizationService),
 );
 app.use('/api/v1', UserRoutes.create(userController, authenticateMiddleware, authorizationService));
+app.use('/api/v1', SessionAuditRoutes.create(sessionAuditController, authenticateMiddleware, authorizationService));
 
 app.use(
   '/api/v1/departments',

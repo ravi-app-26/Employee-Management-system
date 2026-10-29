@@ -2,6 +2,8 @@ import { describe, expect, it } from '@jest/globals';
 import request from 'supertest';
 import { app } from '../../src/app';
 import { AppDataSource } from '../../src/config/database';
+import { redisClient } from '../../src/providers/redis/redis.provider';
+import { sessionKey } from '../../src/providers/redis/session-cache.keys';
 import { createUserByRole } from './helpers';
 
 describe('PATCH /api/v1/employees/:id role restrictions', () => {
@@ -108,12 +110,25 @@ describe('PATCH /api/v1/employees/:id role restrictions', () => {
   it('allows an admin to deactivate an employee login and audits the target', async () => {
     const admin = await createUserByRole('admin');
     const employee = await createUserByRole('employee');
+    const [{ familyId }] = await AppDataSource.query(
+      'SELECT family_id AS "familyId" FROM refresh_tokens WHERE user_id = $1',
+      [employee.id],
+    );
 
     const response = await request(app)
       .delete(`/api/v1/employees/${employee.employeeId}`)
       .set('Authorization', `Bearer ${admin.accessToken}`);
 
     expect(response.status).toBe(204);
+    expect(await redisClient.get(sessionKey(familyId))).toBeNull();
+    const revokedAccess = await request(app)
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${employee.accessToken}`);
+    expect(revokedAccess.status).toBe(401);
+    const refresh = await request(app)
+      .post('/api/v1/auth/refresh')
+      .set('Cookie', employee.refreshCookie.split(';', 1)[0]);
+    expect(refresh.status).toBe(401);
     const users = await AppDataSource.query(
       'SELECT is_active AS "isActive" FROM users WHERE id = $1',
       [employee.id],

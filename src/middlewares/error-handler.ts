@@ -58,7 +58,9 @@ export class ErrorHandlerMiddleware {
       code = 'INVALID_UPLOAD';
       message = 'Uploaded file is invalid';
     } else if ([
-      'ETIMEDOUT', 'ECONNREFUSED', '57P01', '53300', '57014',
+      'ETIMEDOUT', 'ERR_SOCKET_CONNECTION_TIMEOUT', 'ECONNREFUSED', 'ECONNRESET',
+      'EHOSTUNREACH', 'ENETUNREACH', 'EPIPE', '57P01', '57P02', '57P03',
+      '08000', '08001', '08003', '08006', '53300', '57014',
       'EACCES', 'EPERM', 'ENOSPC', 'EIO', 'EMFILE', 'ENFILE', 'ENOTDIR', 'EEXIST',
     ].includes(err?.code)) {
       status = 503;

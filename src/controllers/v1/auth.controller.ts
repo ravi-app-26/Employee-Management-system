@@ -25,7 +25,7 @@ export class AuthController {
 
   login = async (req: Request, res: Response) => {
     const { email, password } = req.body;
-    const tokens = await this.service.login(email, password);
+    const tokens = await this.service.login(email, password, req.id);
 
     res.cookie(REFRESH_COOKIE_NAME, tokens.refreshToken, cookieOptions);
     ApiResponse.ok(res, { accessToken: tokens.accessToken });
@@ -35,14 +35,14 @@ export class AuthController {
     const raw = req.cookies?.[REFRESH_COOKIE_NAME];
     if (!raw) throw new UnauthorizedError('Invalid refresh token');
 
-    const tokens = await this.service.refresh(raw);
+    const tokens = await this.service.refresh(raw, req.id);
 
     res.cookie(REFRESH_COOKIE_NAME, tokens.refreshToken, cookieOptions);
     ApiResponse.ok(res, { accessToken: tokens.accessToken });
   };
 
   logout = async (req: Request, res: Response) => {
-    await this.service.logout(req.cookies?.[REFRESH_COOKIE_NAME]);
+    await this.service.logout(req.cookies?.[REFRESH_COOKIE_NAME], req.id);
 
     res.clearCookie(REFRESH_COOKIE_NAME, clearCookieOptions);
     ApiResponse.noContent(res);
@@ -61,12 +61,12 @@ export class AuthController {
   };
 
   revokeSession = async (req: Request, res: Response) => {
-    await this.service.revokeSession(req.user!.id, String(req.params.id));
+    await this.service.revokeSession(req.user!.id, String(req.params.id), req.id);
     ApiResponse.noContent(res);
   };
 
   logoutAll = async (req: Request, res: Response) => {
-    await this.service.logoutAll(req.user!.id);
+    await this.service.logoutAll(req.user!.id, req.id);
 
     res.clearCookie(REFRESH_COOKIE_NAME, clearCookieOptions);
     ApiResponse.noContent(res);
@@ -74,7 +74,7 @@ export class AuthController {
 
   changePassword = async (req: Request, res: Response) => {
     const { currentPassword, newPassword } = req.body;
-    await this.service.changePassword(req.user!.id, currentPassword, newPassword);
+    await this.service.changePassword(req.user!.id, currentPassword, newPassword, req.id);
 
     res.clearCookie(REFRESH_COOKIE_NAME, clearCookieOptions);
     ApiResponse.noContent(res);

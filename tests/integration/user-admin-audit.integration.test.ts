@@ -2,6 +2,8 @@ import { describe, expect, it } from '@jest/globals';
 import request from 'supertest';
 import { AppDataSource } from '../../src/config/database';
 import { app } from '../../src/app';
+import { redisClient } from '../../src/providers/redis/redis.provider';
+import { sessionKey } from '../../src/providers/redis/session-cache.keys';
 import { createUserByRole } from './helpers';
 
 async function auditRows(action: string, resourceId: string) {
@@ -45,12 +47,25 @@ describe('user administration and own data export', () => {
   it('allows admins to revoke another user sessions and audits the target', async () => {
     const admin = await createUserByRole('admin');
     const employee = await createUserByRole('employee');
+    const [{ familyId }] = await AppDataSource.query(
+      'SELECT family_id AS "familyId" FROM refresh_tokens WHERE user_id = $1',
+      [employee.id],
+    );
 
     const allowed = await request(app)
       .post(`/api/v1/users/${employee.id}/sessions/revoke`)
       .set('Authorization', `Bearer ${admin.accessToken}`);
 
     expect(allowed.status).toBe(204);
+    expect(await redisClient.get(sessionKey(familyId))).toBeNull();
+    const revokedAccess = await request(app)
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${employee.accessToken}`);
+    expect(revokedAccess.status).toBe(401);
+    const refresh = await request(app)
+      .post('/api/v1/auth/refresh')
+      .set('Cookie', employee.refreshCookie.split(';', 1)[0]);
+    expect(refresh.status).toBe(401);
     const activeTokens = await AppDataSource.query(
       'SELECT id FROM refresh_tokens WHERE user_id = $1 AND revoked_at IS NULL',
       [employee.id],
@@ -65,9 +80,10 @@ describe('user administration and own data export', () => {
       }),
     ]);
 
+    const otherEmployee = await createUserByRole('employee');
     const forbidden = await request(app)
       .post(`/api/v1/users/${admin.id}/sessions/revoke`)
-      .set('Authorization', `Bearer ${employee.accessToken}`);
+      .set('Authorization', `Bearer ${otherEmployee.accessToken}`);
     expect(forbidden.status).toBe(403);
   });
 
