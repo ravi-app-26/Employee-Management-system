@@ -14,6 +14,7 @@ tags:
   - name: Employees
   - name: Documents
   - name: Users
+  - name: Session Audit
 paths:
   /health:
     get:
@@ -229,6 +230,43 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
 
+  /api/v1/auth/sessions/history:
+    get:
+      tags: [Session Audit]
+      operationId: getSessionHistory
+      summary: Get the authenticated user's recent session history
+      description: Returns lifecycle audit events for the authenticated user only. Token values and hashes are never returned.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Recent session audit events for the current user
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SessionAuditEvent'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '503':
+          $ref: '#/components/responses/ServerError'
+
   /api/v1/auth/sessions/{id}:
     delete:
       tags: [Authentication]
@@ -278,6 +316,45 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/v1/admin/session-metrics:
+    get:
+      tags: [Session Audit]
+      operationId: getSessionMetrics
+      summary: Get daily session-expiry statistics
+      description: Requires the admin role and audit:read permission. Returns counts for expired sessions, manual revocations/logouts, and refresh-token reuse detections.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+            default: 30
+      responses:
+        '200':
+          description: Daily session audit counts
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SessionAuditDailyMetric'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '503':
           $ref: '#/components/responses/ServerError'
 
   /api/v1/users/{id}/role:
@@ -1340,6 +1417,27 @@ components:
         current:
           type: boolean
           description: Whether this session matches the refresh token cookie sent with the request.
+    SessionAuditEvent:
+      type: object
+      required: [id, sessionId, eventType, occurredAt, processingStatus, correlationId]
+      properties:
+        id: { type: string, format: uuid }
+        sessionId: { type: string, format: uuid }
+        eventType:
+          type: string
+          enum: [SESSION_CREATED, SESSION_EXPIRED, SESSION_REVOKED, LOGOUT, REFRESH_TOKEN_REUSE_DETECTED]
+        occurredAt: { type: string, format: date-time }
+        processingStatus: { type: string, enum: [PROCESSED] }
+        correlationId: { type: string, nullable: true }
+    SessionAuditDailyMetric:
+      type: object
+      required: [date, expiredSessions, manuallyRevokedSessions, refreshTokenReuseDetections, generatedAt]
+      properties:
+        date: { type: string, format: date }
+        expiredSessions: { type: string, description: PostgreSQL bigint count }
+        manuallyRevokedSessions: { type: string, description: PostgreSQL bigint count }
+        refreshTokenReuseDetections: { type: string, description: PostgreSQL bigint count }
+        generatedAt: { type: string, format: date-time }
     Principal:
       type: object
       required: [id, role, employeeId]

@@ -5,7 +5,7 @@ Secure REST API built with Express 5, TypeScript, PostgreSQL, and TypeORM. The c
 
 - Node.js and npm compatible with the locked dependencies
 - PostgreSQL
-- Docker Compose for integration tests
+- A local Redis instance for cache/session metadata and integration tests
 
 ## Local Setup
 
@@ -49,6 +49,11 @@ For a production build, run `npm run build` followed by `npm start`. The server 
 | `CORS_ORIGINS` | `http://localhost:5173` | Comma-separated allowed origins. |
 | `TRUST_PROXY` | `0` | Number of trusted proxy hops. Keep `0` unless the deployment has a known, trusted proxy topology. |
 | `DATABASE_URL` | Required | PostgreSQL connection URL. |
+| `REDIS_URL` | `redis://127.0.0.1:6379` | Redis connection URL. |
+| `REDIS_KEY_PREFIX` | Empty | Optional namespace prepended to application Redis keys. |
+| `DEPARTMENT_CACHE_TTL_SECONDS` | `60` | Department-list cache lifetime. |
+| `PERMISSION_CACHE_TTL_SECONDS` | `60` | Permission cache lifetime. |
+| `SESSION_RECONCILIATION_CRON` | `*/5 * * * *` | Cron schedule for PostgreSQL-backed session-cache reconciliation. |
 | `JWT_ACCESS_SECRET` | Required, minimum 32 chars | HS256 JWT signing secret. |
 | `JWT_ACCESS_TTL` | `15m` | Access-token lifetime. |
 | `JWT_ISSUER` | `ems-api` | Required JWT issuer claim. |
@@ -67,6 +72,28 @@ For a production build, run `npm run build` followed by `npm start`. The server 
 
 The authoritative validation/defaults are in [`src/config/env.ts`](src/config/env.ts). `.env.example` currently repeats `CORS_ORIGINS`; set one consistent value in the local `.env`.
 
+### Redis Configuration
+
+`REDIS_URL` accepts a Redis URL with optional username/password credentials, for example `redis://:password@127.0.0.1:6379` or `rediss://username:password@redis.example.net:6380`. Use `rediss://` to enable TLS; certificate verification remains enabled by the Redis client. Keep credentials in an untracked `.env` or secret manager, URL-encode special characters, and never commit populated credentials.
+
+`REDIS_CONNECT_TIMEOUT_MS`, `REDIS_SOCKET_TIMEOUT_MS`, `REDIS_MAX_RECONNECT_RETRIES`, and `REDIS_RECONNECT_BASE_DELAY_MS` bound connection waits and retries. Reconnect delay grows exponentially and is capped at five seconds; the retry count is finite to avoid an outage retry storm. `REDIS_KEY_PREFIX` isolates this application/environment, while the cache, session, token, and event namespace variables keep key classes separate.
+
+| Redis key class | Default lifetime | Rationale |
+|---|---|---|
+| Department and permission cache entries | 60 seconds | Limits staleness while keeping repeated reads inexpensive; PostgreSQL remains the source of truth. |
+| Session and refresh-token metadata | Remaining PostgreSQL refresh-token lifetime | Redis metadata cannot outlive the authoritative token. |
+| Expiry-event deduplication marker | 24 hours | Suppresses duplicate Pub/Sub deliveries; PostgreSQL event keys and scheduled reconciliation provide durable idempotency/recovery. |
+
+For local development, install/start Redis using the host OS package or Redis distribution, leave `REDIS_URL=redis://127.0.0.1:6379`, and verify it responds with `redis-cli ping`. No container runtime is required. Expiry notifications require Redis `notify-keyspace-events` flags `E` and `x`; startup attempts to add them while preserving existing flags. If `CONFIG SET` is restricted, configure `notify-keyspace-events Ex` in the local Redis server configuration. To exercise expiry, use a short-lived test refresh token/session or the session-expiry integration tests against the explicitly named test database and dedicated `TEST_REDIS_URL`.
+
+Redis is an optimization, not an authorization source. Authentication checks user activity and session-family revocation in PostgreSQL on every protected request. If those PostgreSQL checks fail, the request is rejected and transient database connection errors return `503`; Redis unavailability degrades caching and expiry notifications but never bypasses the PostgreSQL check. `/health/ready` reports Redis as `degraded` when disconnected, and `/health/metrics` exposes Redis/cache/expiry/reconciliation counters.
+
+## Redis Session Expiry Events
+
+The API uses typed keys `session:<familyId>`, `refresh-token:<tokenHash>`, and `refresh-token-family:<familyId>`. When Redis is available, startup attempts to preserve the current `notify-keyspace-events` value and add `E` and `x`, enabling keyevent expiry notifications (`Ex`). The Redis account therefore needs permission to read and update this configuration. On Redis installations where `CONFIG SET` is restricted, an administrator must enable the flags in the Redis server configuration, for example `notify-keyspace-events Ex`; retain any other flags already required by that server.
+
+Expiry Pub/Sub is best-effort, not durable. The subscriber delegates events to the session expiry service, which checks PostgreSQL before restoring or cleaning Redis metadata. Session-expiry audit insertion is recoverable from PostgreSQL refresh-token rows: a reconciliation job runs on `SESSION_RECONCILIATION_CRON`, retries stale families, and inserts idempotent audit events even when notifications were missed or a database write failed. The audit event unique key prevents duplicates. Reconciliation does not delete PostgreSQL refresh-token rows.
+
 ## Tests And Checks
 
 ```bash
@@ -76,7 +103,7 @@ npm run typecheck
 npm run build
 ```
 
-`npm run test:integration` starts the PostgreSQL 16 test container on `127.0.0.1:55432`, applies migrations, and runs Jest serially. The test database is separate from the application database. Use `docker compose -f docker-compose.test.yml down -v` only when you intentionally want to delete the integration-test database volume.
+`npm run test:integration` applies migrations and runs Jest serially against locally running PostgreSQL and Redis. Configure a dedicated test database with `TEST_DATABASE_URL` (or `DATABASE_URL` whose database name contains `test`) and `TEST_REDIS_URL` (or `REDIS_URL`). Integration setup refuses non-test database names and uses a unique Redis key prefix; its setup truncates tables in that test database, so never point it at development or production data. It does not start Docker or Compose.
 
 Integration coverage includes authentication, refresh-token concurrency/replay, employee CRUD/access rules, user administration/audit, document flows, security behavior, DTO response shape, and department sorting. The default `npm test` suite covers the configured unit tests, including pino redaction.
 

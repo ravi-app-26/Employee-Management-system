@@ -1,17 +1,34 @@
 import { afterAll, beforeAll, beforeEach } from '@jest/globals';
 import { AppDataSource } from '../../src/config/database';
 import { RateLimitMiddleware } from '../../src/middlewares/rate-limiter';
+import { redisClient } from '../../src/providers/redis/redis.provider';
+
+async function clearTestRedisKeys(): Promise<void> {
+  if (!redisClient.isReady) return;
+  const keys: string[] = [];
+  for await (const key of redisClient.scanIterator({
+    MATCH: `${process.env.REDIS_KEY_PREFIX}:*`,
+    COUNT: 100,
+  })) {
+    keys.push(...key);
+  }
+  if (keys.length) await redisClient.del(keys);
+}
 
 beforeAll(async () => {
   await AppDataSource.initialize();
+  await redisClient.connect();
 });
 
 beforeEach(async () => {
   RateLimitMiddleware.auth.resetKey('127.0.0.1');
   RateLimitMiddleware.handle.resetKey('127.0.0.1');
+  await clearTestRedisKeys();
 
   await AppDataSource.query(`
     TRUNCATE TABLE
+      session_audit_daily_summaries,
+      session_audit_events,
       audit_logs,
       refresh_tokens,
       users,
@@ -39,6 +56,7 @@ beforeEach(async () => {
       ('department:update'),
       ('user:assign_role'),
       ('session:revoke_any'),
+      ('audit:read'),
       ('profile:read_own'),
       ('profile:update_own'),
       ('profile:export_own')
@@ -56,6 +74,7 @@ beforeEach(async () => {
       OR (permissions.name = 'department:update' AND roles.name = 'admin')
       OR (permissions.name = 'user:assign_role' AND roles.name = 'admin')
       OR (permissions.name = 'session:revoke_any' AND roles.name = 'admin')
+      OR (permissions.name = 'audit:read' AND roles.name = 'admin')
        OR permissions.name = 'profile:read_own'
       OR permissions.name = 'profile:update_own'
       OR permissions.name = 'profile:export_own'
@@ -63,7 +82,23 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
+  await clearTestRedisKeys();
   if (AppDataSource.isInitialized) {
+    await AppDataSource.query(`
+      TRUNCATE TABLE
+        session_audit_daily_summaries,
+        session_audit_events,
+        audit_logs,
+        refresh_tokens,
+        users,
+        employees,
+        departments,
+        role_permissions,
+        permissions,
+        roles
+      RESTART IDENTITY CASCADE
+    `);
     await AppDataSource.destroy();
   }
+  if (redisClient.isOpen) await redisClient.quit();
 });

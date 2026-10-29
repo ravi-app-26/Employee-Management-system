@@ -1,4 +1,7 @@
 export { AuditLog } from './audit-log.entity';
+export { SessionAuditEvent, SESSION_AUDIT_EVENT_TYPES } from './session-audit-event.entity';
+export type { SessionAuditEventType } from './session-audit-event.entity';
+export { SessionAuditDailySummary } from './session-audit-daily-summary.entity';
 export { Department } from './department.entity';
 export { EmployeeDocument } from './employee-document.entity';
 export { EmployeeDocumentStorage } from './employee-document-storage.entity';
@@ -7,3 +10,4 @@ export { Permission } from './permission.entity';
 export { RefreshToken } from './refresh-token.entity';
 export { Role } from './role.entity';
 export { User } from './user.entity';
+export { ActivityLog } from './activity-log.entity';

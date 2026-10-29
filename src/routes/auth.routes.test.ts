@@ -4,6 +4,7 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { AuthController } from '../controllers/v1';
 import { ErrorHandlerMiddleware } from '../middlewares';
+import { AuthenticationMiddleware } from '../middlewares/authenticate';
 import { UnauthorizedError } from '../errors/app-error';
 import { AuthService, AuthorizationService } from '../services';
 import { AuthRoutes } from './auth.routes';
@@ -60,6 +61,14 @@ app.use(
   '/api/v1/auth',
   AuthRoutes.create(new AuthController(service), authenticate, {} as AuthorizationService),
 );
+const databaseUnavailableAuth = AuthenticationMiddleware.create({
+  verifyAccessToken: () => ({ sub: user.id, role: user.role, employeeId: user.employeeId, familyId: user.id }),
+  isActive: async () => {
+    throw Object.assign(new Error('database connection unavailable'), { code: '08006' });
+  },
+  isSessionActive: async () => true,
+} as unknown as AuthService);
+app.get('/test/required-session-check', databaseUnavailableAuth, (_req, res) => res.sendStatus(204));
 app.use(ErrorHandlerMiddleware.handle);
 
 describe('auth routes', () => {
@@ -76,7 +85,7 @@ describe('auth routes', () => {
     expect(response.status).toBe(200);
     expect(response.body.data.accessToken).toBe(tokens.accessToken);
     expect(response.headers['set-cookie'][0]).toContain('refresh_token=mock-refresh-token');
-    expect(service.login).toHaveBeenCalledWith('ravi@yopmail.com', '123456');
+    expect(service.login).toHaveBeenCalledWith('ravi@yopmail.com', '123456', 'auth-route-test-request');
   });
 
   it('rejects refresh requests without a refresh-token cookie', async () => {
@@ -103,5 +112,15 @@ describe('auth routes', () => {
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe('UNAUTHORIZED');
     expect(service.listSessions).not.toHaveBeenCalled();
+  });
+
+  it('fails closed with 503 when the PostgreSQL authentication check is unavailable', async () => {
+    const response = await request(app)
+      .get('/test/required-session-check')
+      .set('Authorization', 'Bearer test-access-token');
+
+    expect(response.status).toBe(503);
+    expect(response.body.error.code).toBe('DEPENDENCY_UNAVAILABLE');
+    expect(response.body.error.message).toBe('A required service is temporarily unavailable');
   });
 });

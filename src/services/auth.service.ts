@@ -28,7 +28,7 @@ export class AuthService {
     return this.jwtProvider.signAccessToken(payload);
   }
 
-  private async issueRefreshToken(userId: string, familyId: string): Promise<string> {
+  private async issueRefreshToken(userId: string, familyId: string, correlationId?: string): Promise<string> {
     const token = randomBytes(48).toString('hex'); // asli token, sirf client ko jayega
     const expiresAt = new Date(Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
 
@@ -37,6 +37,7 @@ export class AuthService {
       tokenHash: this.hashToken(token), // DB me sirf hash
       familyId,
       expiresAt,
+      correlationId,
     });
     return token;
   }
@@ -50,9 +51,16 @@ export class AuthService {
     return this.users.isActive(userId);
   }
 
+  async isSessionActive(userId: string, familyId: string): Promise<boolean> {
+    const expiresAt = await this.refreshTokens.findActiveSessionExpiry(userId, familyId);
+    if (!expiresAt) return false;
+    await this.refreshTokens.ensureSession(familyId, expiresAt);
+    return true;
+  }
+
   // ---------- use cases ----------
 
-  async login(email: string, password: string): Promise<TokenPair> {
+  async login(email: string, password: string, correlationId?: string): Promise<TokenPair> {
     const user = await this.users.findByEmailWithPassword(email);
 
     // User na ho tab bhi compare chalega
@@ -63,28 +71,35 @@ export class AuthService {
       throw new UnauthorizedError('Invalid email or password');
     }
 
+    const familyId = randomUUID();
+    const refreshToken = await this.issueRefreshToken(user.id, familyId, correlationId);
     const accessToken = this.signAccessToken({
       sub: user.id,
       role: user.role.name,
       employeeId: user.employeeId,
+      familyId,
     });
-    const refreshToken = await this.issueRefreshToken(user.id, randomUUID()); // naya login = nayi family
 
     return { accessToken, refreshToken };
   }
 
-  async refresh(rawToken: string): Promise<TokenPair> {
+  async refresh(rawToken: string, correlationId?: string): Promise<TokenPair> {
     const stored = await this.refreshTokens.findByHash(this.hashToken(rawToken));
 
     if (!stored) throw new UnauthorizedError('Invalid refresh token');
 
     // REUSE DETECTION: revoke ho chuka token dobara aaya, matlab chori ho sakta hai
     if (stored.revokedAt) {
-      await this.refreshTokens.revokeFamily(stored.familyId);
+      await this.refreshTokens.revokeFamily(
+        stored.familyId,
+        'SESSION_REVOKED',
+        correlationId,
+        'REFRESH_TOKEN_REUSE_DETECTED',
+      );
       throw new UnauthorizedError('Invalid refresh token');
     }
 
-    if (stored.expiresAt.getTime() < Date.now()) {
+    if (stored.expiresAt.getTime() <= Date.now()) {
       throw new UnauthorizedError('Invalid refresh token');
     }
 
@@ -93,6 +108,8 @@ export class AuthService {
       await this.refreshTokens.revokeFamily(stored.familyId);
       throw new UnauthorizedError('Invalid refresh token');
     }
+
+    await this.refreshTokens.ensureSession(stored.familyId, stored.expiresAt);
 
     // Revoke the old token and persist its replacement atomically.
     const refreshToken = randomBytes(48).toString('hex');
@@ -107,15 +124,16 @@ export class AuthService {
       sub: user.id,
       role: user.role.name,
       employeeId: user.employeeId,
+      familyId: stored.familyId,
     });
 
     return { accessToken, refreshToken };
   }
 
-  async logout(rawToken: string | undefined): Promise<void> {
+  async logout(rawToken: string | undefined, correlationId?: string): Promise<void> {
     if (!rawToken) return;
     const stored = await this.refreshTokens.findByHash(this.hashToken(rawToken));
-    if (stored) await this.refreshTokens.revokeFamily(stored.familyId);
+    if (stored) await this.refreshTokens.revokeFamily(stored.familyId, 'LOGOUT', correlationId);
   }
 
   async listSessions(userId: string, rawToken?: string) {
@@ -129,19 +147,20 @@ export class AuthService {
     }));
   }
 
-  async revokeSession(userId: string, sessionId: string): Promise<void> {
-    const revoked = await this.refreshTokens.revokeSession(userId, sessionId);
+  async revokeSession(userId: string, sessionId: string, correlationId?: string): Promise<void> {
+    const revoked = await this.refreshTokens.revokeSession(userId, sessionId, 'SESSION_REVOKED', correlationId);
     if (!revoked) throw new NotFoundError('Session not found');
   }
 
-  async logoutAll(userId: string): Promise<void> {
-    await this.refreshTokens.revokeAllForUser(userId);
+  async logoutAll(userId: string, correlationId?: string): Promise<void> {
+    await this.refreshTokens.revokeAllForUser(userId, 'LOGOUT', correlationId);
   }
 
   async changePassword(
     userId: string,
     currentPassword: string,
     newPassword: string,
+    correlationId?: string,
   ): Promise<void> {
     const user = await this.users.findByIdWithPassword(userId);
     if (!user || !user.isActive || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
@@ -153,7 +172,7 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(newPassword, env.BCRYPT_ROUNDS);
     await this.users.updatePassword(userId, passwordHash);
-    await this.refreshTokens.revokeAllForUser(userId);
+    await this.refreshTokens.revokeAllForUser(userId, 'SESSION_REVOKED', correlationId);
   }
 
     async register(

@@ -16,6 +16,9 @@ export class AuthenticationMiddleware {
       if (!(await authService.isActive(payload.sub))) {
         throw new UnauthorizedError('Invalid or expired token');
       }
+      if (!(await authService.isSessionActive(payload.sub, payload.familyId))) {
+        throw new UnauthorizedError('Invalid or expired token');
+      }
 
       req.user = {
         id: payload.sub,
